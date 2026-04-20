@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens: TradingView-inspired dark palette + Robinhood-style
+ * minimalism, composed into a Discord-style two-rail workspace shell.
+ *
+ * Layering (darkest → lightest):
+ *   rail-deep   outermost 72px account rail
+ *   rail        inner module rail (icon strip)
+ *   background  page canvas
+ *   surface     content cards
+ *   surface-elevated  hover / floating panels
+ */
+:root {
+  --rail-deep: #070a0f;
+  --rail: #0a0f16;
+  --background: #0d1117;
+  --surface: #151b23;
+  --surface-elevated: #1c232c;
+  --border: #2a313c;
+  --border-strong: #3a424f;
+  --foreground: #e6edf3;
+  --muted: #8b949e;
+  --muted-strong: #b1bac4;
+  --accent: #58a6ff;
+  --accent-soft: rgba(88, 166, 255, 0.14);
+  --up: #26a69a;
+  --down: #ef5350;
+
+  /* Rail / icon geometry */
+  --rail-width: 72px;
+  --module-width: 64px;
+  --icon-size: 44px;
+  --icon-radius: 14px;
+  --icon-radius-active: 18px;
+}
+
+@theme inline {
+  --color-rail-deep: var(--rail-deep);
+  --color-rail: var(--rail);
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/*
+ * Ambient glow used behind the dashboard hero — a soft radial wash in the
+ * TradingView accent. Low opacity, fixed position, behind content.
+ */
+.ambient-glow::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      60% 50% at 18% 0%,
+      rgba(88, 166, 255, 0.08),
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 40% at 85% 110%,
+      rgba(38, 166, 154, 0.06),
+      transparent 70%
+    );
+}
+
+/*
+ * Discord-style active pill indicator: a 4px high-contrast bar that
+ * slides in from the left edge of a rail item. Uses scaleY so the
+ * transition feels springy.
+ */
+.rail-indicator {
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 4px;
+  height: 20px;
+  border-radius: 0 4px 4px 0;
+  background: var(--foreground);
+  transform: translateY(-50%) scaleY(0.2);
+  opacity: 0;
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.9, 0.4, 1.2),
+    opacity 180ms ease,
+    height 180ms ease;
+}
+.rail-item[data-active="true"] .rail-indicator {
+  transform: translateY(-50%) scaleY(1);
+  opacity: 1;
+  height: 40px;
+}
+.rail-item[data-hover]:hover .rail-indicator {
+  transform: translateY(-50%) scaleY(1);
+  opacity: 1;
+  height: 10px;
+}
+
+/*
+ * Floating tooltip shown on hover for icon-only rail items. CSS-only:
+ * group-hover reveals it; transform slides it in from the left.
+ */
+.rail-tooltip {
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 50%;
+  transform: translate(-6px, -50%);
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #000;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+  z-index: 50;
+}
+.rail-tooltip::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: #000;
+}
+.rail-group:hover .rail-tooltip {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
