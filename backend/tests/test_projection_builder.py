@@ -3,6 +3,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
+import pytest
 from sqlalchemy import func, select
 
 from app.db.enums import (
@@ -11,7 +12,7 @@ from app.db.enums import (
     CorporateActionType,
     TradeSide,
 )
-from app.db.models import Account, Instrument
+from app.db.models import Account, Instrument, Trade
 from app.services.ledger.account_ledger import AccountLedger
 from app.services.ledger.rows import (
     LedgerAccount,
@@ -134,3 +135,48 @@ def test_project_instruments_returns_symbol_map(db_session, tmp_path):
     assert set(mapping) == {"AAPL", "MSFT"}
     assert mapping["AAPL"].id is not None
     assert db_session.scalar(select(func.count()).select_from(Instrument)) == 2
+
+
+# --- trades ---------------------------------------------------------------
+
+
+def test_project_trades_inserts(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.instruments.append([_li("AAPL")])
+    ledger.trades.append([_lt("T1"), _lt("T2")])
+
+    account = builder.upsert_account(db_session, ledger.read_account())
+    instruments = builder.project_instruments(db_session, ledger)
+    builder.project_trades(db_session, account, ledger, instruments)
+
+    trades = db_session.scalars(select(Trade)).all()
+    assert {t.trade_id for t in trades} == {"T1", "T2"}
+    t1 = next(t for t in trades if t.trade_id == "T1")
+    assert t1.account_id == account.id
+    assert t1.instrument_id == instruments["AAPL"].id
+    assert t1.proceeds == Decimal("-1502.50")  # mapped from proceeds_orig
+
+
+def test_project_trades_replaces_existing(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.instruments.append([_li("AAPL")])
+    ledger.trades.append([_lt("T1")])
+
+    account = builder.upsert_account(db_session, ledger.read_account())
+    instruments = builder.project_instruments(db_session, ledger)
+    builder.project_trades(db_session, account, ledger, instruments)
+    # Project again — must replace, not duplicate.
+    builder.project_trades(db_session, account, ledger, instruments)
+
+    assert db_session.scalar(select(func.count()).select_from(Trade)) == 1
+
+
+def test_project_trades_unknown_instrument_raises(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.trades.append([_lt("T1", instrument="GHOST")])
+
+    account = builder.upsert_account(db_session, ledger.read_account())
+    instruments = builder.project_instruments(db_session, ledger)  # empty
+
+    with pytest.raises(ValueError, match="GHOST"):
+        builder.project_trades(db_session, account, ledger, instruments)

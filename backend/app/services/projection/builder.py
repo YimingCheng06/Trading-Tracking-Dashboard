@@ -11,7 +11,7 @@ in a later milestone.
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Account, Instrument
+from app.db.models import Account, Instrument, Trade
 from app.services.ledger.account_ledger import AccountLedger
 from app.services.ledger.rows import LedgerAccount, LedgerInstrument
 
@@ -70,6 +70,45 @@ def project_instruments(
         li.symbol: upsert_instrument(session, li)
         for li in ledger.instruments.read()
     }
+
+
+def project_trades(
+    session: Session,
+    account: Account,
+    ledger: AccountLedger,
+    instruments: dict[str, Instrument],
+) -> None:
+    """Delete this account's trades, then re-insert them from the ledger."""
+    session.query(Trade).filter_by(account_id=account.id).delete()
+    for lt in ledger.trades.read():
+        inst = instruments.get(lt.instrument)
+        if inst is None:
+            raise ValueError(
+                f"trade {lt.trade_id} references unknown instrument "
+                f"{lt.instrument!r} (not in instruments.csv)"
+            )
+        session.add(
+            Trade(
+                account_id=account.id,
+                instrument_id=inst.id,
+                trade_id=lt.trade_id,
+                side=lt.side,
+                open_close=lt.open_close,
+                quantity=lt.quantity,
+                price=lt.price,
+                currency=lt.currency,
+                fx_rate_to_usd=lt.fx_rate_to_usd,
+                proceeds=lt.proceeds_orig,
+                proceeds_usd=lt.proceeds_usd,
+                commission=lt.commission_orig,
+                commission_usd=lt.commission_usd,
+                realized_pnl_ibkr=lt.realized_pnl_ibkr,
+                executed_at=lt.executed_at,
+                source=lt.source,
+                import_batch=lt.import_batch,
+            )
+        )
+    session.flush()
 
 
 def rebuild_account(session: Session, ledger: AccountLedger) -> Account:
