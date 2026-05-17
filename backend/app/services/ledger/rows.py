@@ -85,7 +85,7 @@ class LedgerCashFlow(BaseModel):
 
     @property
     def dedup_key(self) -> tuple:
-        if self.external_id:
+        if self.external_id not in (None, ""):
             return (self.external_id,)
         return (self.flow_type, self.occurred_at, self.amount_orig)
 

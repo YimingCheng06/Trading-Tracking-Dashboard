@@ -94,3 +94,31 @@ def test_account_model():
         broker_account_id="U1", name="Main", base_currency="USD"
     )
     assert acct.broker == "IBKR"
+
+
+def test_cash_flow_dedup_key_uses_nonempty_falsy_id():
+    """A non-empty id like "0" must still be used, not treated as absent."""
+    cf = rows.LedgerCashFlow(
+        flow_type=CashFlowType.DEPOSIT,
+        currency="USD",
+        fx_rate_to_usd=Decimal("1.0"),
+        amount_orig=Decimal("5000"),
+        amount_usd=Decimal("5000"),
+        external_id="0",
+        occurred_at=datetime(2026, 1, 1),
+    )
+    assert cf.dedup_key == ("0",)
+
+
+def test_cash_flow_dedup_key_treats_empty_id_as_absent():
+    """An empty-string external_id falls back to the content key."""
+    cf = rows.LedgerCashFlow(
+        flow_type=CashFlowType.DEPOSIT,
+        currency="USD",
+        fx_rate_to_usd=Decimal("1.0"),
+        amount_orig=Decimal("5000"),
+        amount_usd=Decimal("5000"),
+        external_id="",
+        occurred_at=datetime(2026, 1, 1),
+    )
+    assert cf.dedup_key == (CashFlowType.DEPOSIT, datetime(2026, 1, 1), Decimal("5000"))
