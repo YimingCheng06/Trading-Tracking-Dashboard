@@ -12,7 +12,7 @@ from app.db.enums import (
     CorporateActionType,
     TradeSide,
 )
-from app.db.models import Account, CashFlow, Instrument, Trade
+from app.db.models import Account, CashFlow, CorporateAction, Instrument, Trade
 from app.services.ledger.account_ledger import AccountLedger
 from app.services.ledger.rows import (
     LedgerAccount,
@@ -221,3 +221,34 @@ def test_project_cash_flows_deposit_without_instrument(db_session, tmp_path):
     flow = db_session.scalars(select(CashFlow)).one()
     assert flow.instrument_id is None
     assert flow.amount == Decimal("5000")
+
+
+# --- corporate actions ----------------------------------------------------
+
+
+def test_project_corporate_actions_upserts(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.instruments.append([_li("AAPL")])
+    ledger.corporate_actions.append([_lca()])
+
+    instruments = builder.project_instruments(db_session, ledger)
+    builder.project_corporate_actions(db_session, ledger, instruments)
+
+    ca = db_session.scalars(select(CorporateAction)).one()
+    assert ca.instrument_id == instruments["AAPL"].id
+    assert ca.action_type == CorporateActionType.SPLIT
+    assert ca.ratio == Decimal("10")
+
+
+def test_project_corporate_actions_idempotent(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.instruments.append([_li("AAPL")])
+    ledger.corporate_actions.append([_lca()])
+
+    instruments = builder.project_instruments(db_session, ledger)
+    builder.project_corporate_actions(db_session, ledger, instruments)
+    builder.project_corporate_actions(db_session, ledger, instruments)
+
+    assert (
+        db_session.scalar(select(func.count()).select_from(CorporateAction)) == 1
+    )

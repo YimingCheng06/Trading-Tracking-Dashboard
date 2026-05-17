@@ -11,7 +11,7 @@ in a later milestone.
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Account, CashFlow, Instrument, Trade
+from app.db.models import Account, CashFlow, CorporateAction, Instrument, Trade
 from app.services.ledger.account_ledger import AccountLedger
 from app.services.ledger.rows import LedgerAccount, LedgerInstrument
 
@@ -154,6 +154,47 @@ def project_cash_flows(
                 import_batch=lc.import_batch,
             )
         )
+    session.flush()
+
+
+def project_corporate_actions(
+    session: Session,
+    ledger: AccountLedger,
+    instruments: dict[str, Instrument],
+) -> None:
+    """Upsert corporate actions by (instrument, action_type, ex_date).
+
+    corporate_actions is a global, instrument-scoped table — upserted rather
+    than deleted-per-account, since the same action may appear in several
+    accounts' ledgers. Raises ValueError on an unknown instrument; on that
+    error the session is left uncommitted and the caller must roll back.
+    """
+    for lca in ledger.corporate_actions.read():
+        inst = instruments.get(lca.instrument)
+        if inst is None:
+            raise ValueError(
+                f"corporate action references unknown instrument "
+                f"{lca.instrument!r} (not in instruments.csv)"
+            )
+        ca = session.scalar(
+            select(CorporateAction).where(
+                CorporateAction.instrument_id == inst.id,
+                CorporateAction.action_type == lca.action_type,
+                CorporateAction.ex_date == lca.ex_date,
+            )
+        )
+        if ca is None:
+            ca = CorporateAction(
+                instrument_id=inst.id,
+                action_type=lca.action_type,
+                ex_date=lca.ex_date,
+            )
+            session.add(ca)
+        ca.ratio = lca.ratio
+        ca.description = lca.description
+        ca.external_id = lca.external_id
+        ca.source = lca.source
+        ca.import_batch = lca.import_batch
     session.flush()
 
 
