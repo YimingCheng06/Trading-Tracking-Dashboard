@@ -5,7 +5,10 @@ import pytest
 
 from app.db.enums import AssetClass, TradeSide
 from app.db.models import Instrument, Trade
+from app.services.ledger.account_ledger import AccountLedger
+from app.services.ledger.rows import LedgerAccount, LedgerInstrument, LedgerTrade
 from app.services.pnl.engine import compute_positions, compute_realized_pnl
+from app.services.projection.builder import rebuild_account
 
 
 def _db_trade(account, instrument, side, quantity, proceeds_usd, *, trade_id, executed_at):
@@ -93,3 +96,43 @@ def test_compute_positions_raises_on_dangling_instrument(db_session, account, in
 
     with pytest.raises(LookupError, match="999999"):
         compute_positions(db_session, account)
+
+
+def test_engine_runs_on_projection_built_from_ledger(db_session, tmp_path):
+    # Build a CSV ledger, project it into the DB (M3), then run the engine.
+    ledger = AccountLedger.create(
+        tmp_path,
+        LedgerAccount(broker_account_id="U1", name="Main", base_currency="USD"),
+    )
+    ledger.instruments.append(
+        [LedgerInstrument(symbol="AAPL", asset_class=AssetClass.STOCK, currency="USD")]
+    )
+
+    def _lt(trade_id, side, qty, proceeds_usd, when):
+        return LedgerTrade(
+            trade_id=trade_id,
+            instrument="AAPL",
+            side=side,
+            quantity=Decimal(str(qty)),
+            price=Decimal("100"),
+            currency="USD",
+            fx_rate_to_usd=Decimal("1"),
+            proceeds_orig=Decimal(str(proceeds_usd)),
+            proceeds_usd=Decimal(str(proceeds_usd)),
+            executed_at=when,
+        )
+
+    ledger.trades.append(
+        [
+            _lt("B1", TradeSide.BUY, 10, "-1000", datetime(2026, 1, 1, 10)),
+            _lt("S1", TradeSide.SELL, 4, "480", datetime(2026, 1, 2, 10)),
+        ]
+    )
+
+    account = rebuild_account(db_session, ledger)
+
+    assert compute_realized_pnl(db_session, account) == Decimal("80")
+    positions = compute_positions(db_session, account)
+    assert len(positions) == 1
+    assert positions[0].quantity == Decimal("6")
+    assert positions[0].average_cost == Decimal("100")
