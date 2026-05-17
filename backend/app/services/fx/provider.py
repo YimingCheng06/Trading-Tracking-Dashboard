@@ -30,3 +30,33 @@ class StatementFxProvider(FxRateProvider):
         if currency == "USD":
             return Decimal("1")
         return self._rates.get((currency, on_date))
+
+
+class ChainedFxProvider(FxRateProvider):
+    """Tries each provider in order, returning the first non-None rate."""
+
+    def __init__(self, providers: list[FxRateProvider]) -> None:
+        self._providers = providers
+
+    def get_rate(self, currency: str, on_date: date) -> Decimal | None:
+        for provider in self._providers:
+            rate = provider.get_rate(currency, on_date)
+            if rate is not None:
+                return rate
+        return None
+
+
+def convert_to_usd(
+    amount: Decimal,
+    currency: str,
+    on_date: date,
+    provider: FxRateProvider,
+) -> Decimal:
+    """Convert `amount` in `currency` on `on_date` to USD.
+
+    Raises ValueError if the provider has no rate for that currency/date.
+    """
+    rate = provider.get_rate(currency, on_date)
+    if rate is None:
+        raise ValueError(f"no FX rate for {currency} on {on_date.isoformat()}")
+    return amount * rate
