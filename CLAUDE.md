@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Repository
+
+GitHub: https://github.com/YimingCheng06/Trading-Tracking-Dashboard
+
 ## What this is
 
 Personal trading-tracking dashboard. Imports IBKR Daily Activity Statements, computes positions & P&L, and (later) layers on realtime quotes and a BYOK AI/news analysis layer. The project is built in numbered phases — see README.md "进度 (Progress)" for current status and the authoritative roadmap at `~/.claude/plans/dashboard-traking-ibkr-daily-activity-s-squishy-bee.md` (read it before starting feature work).
