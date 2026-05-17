@@ -262,3 +262,44 @@ def test_project_corporate_actions_unknown_instrument_raises(db_session, tmp_pat
 
     with pytest.raises(ValueError, match="GHOST"):
         builder.project_corporate_actions(db_session, ledger, instruments)
+
+
+# --- rebuild_account ------------------------------------------------------
+
+
+def _populate(ledger):
+    ledger.instruments.append([_li("AAPL")])
+    ledger.trades.append([_lt("T1"), _lt("T2")])
+    ledger.cash_flows.append([_lc(external_id="DIV-1")])
+    ledger.corporate_actions.append([_lca()])
+
+
+def test_rebuild_account_full(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    _populate(ledger)
+
+    account = builder.rebuild_account(db_session, ledger)
+
+    assert account.broker_account_id == "U1"
+    assert db_session.scalar(select(func.count()).select_from(Trade)) == 2
+    assert db_session.scalar(select(func.count()).select_from(CashFlow)) == 1
+    assert db_session.scalar(select(func.count()).select_from(Instrument)) == 1
+    assert (
+        db_session.scalar(select(func.count()).select_from(CorporateAction)) == 1
+    )
+
+
+def test_rebuild_account_is_idempotent(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    _populate(ledger)
+
+    builder.rebuild_account(db_session, ledger)
+    builder.rebuild_account(db_session, ledger)  # second rebuild
+
+    assert db_session.scalar(select(func.count()).select_from(Account)) == 1
+    assert db_session.scalar(select(func.count()).select_from(Trade)) == 2
+    assert db_session.scalar(select(func.count()).select_from(CashFlow)) == 1
+    assert db_session.scalar(select(func.count()).select_from(Instrument)) == 1
+    assert (
+        db_session.scalar(select(func.count()).select_from(CorporateAction)) == 1
+    )

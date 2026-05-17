@@ -199,5 +199,16 @@ def project_corporate_actions(
 
 
 def rebuild_account(session: Session, ledger: AccountLedger) -> Account:
-    """Full rebuild of one account's projection. Implemented incrementally."""
-    return upsert_account(session, ledger.read_account())
+    """Full rebuild of one account's DB projection from its CSV ledger.
+
+    Account-scoped tables (trades, cash_flows) are deleted and re-inserted;
+    global tables (instruments, corporate_actions) are upserted by key.
+    Running this repeatedly is idempotent.
+    """
+    account = upsert_account(session, ledger.read_account())
+    instruments = project_instruments(session, ledger)
+    project_trades(session, account, ledger, instruments)
+    project_cash_flows(session, account, ledger, instruments)
+    project_corporate_actions(session, ledger, instruments)
+    session.commit()
+    return account
