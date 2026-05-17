@@ -303,3 +303,14 @@ def test_rebuild_account_is_idempotent(db_session, tmp_path):
     assert (
         db_session.scalar(select(func.count()).select_from(CorporateAction)) == 1
     )
+
+
+def test_rebuild_account_rolls_back_on_error(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.trades.append([_lt("T1", instrument="GHOST")])  # unknown instrument
+
+    with pytest.raises(ValueError, match="GHOST"):
+        builder.rebuild_account(db_session, ledger)
+
+    # The failed rebuild must leave the session clean — no partial account row.
+    assert db_session.scalar(select(func.count()).select_from(Account)) == 0

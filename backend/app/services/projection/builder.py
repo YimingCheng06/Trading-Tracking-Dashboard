@@ -203,12 +203,18 @@ def rebuild_account(session: Session, ledger: AccountLedger) -> Account:
 
     Account-scoped tables (trades, cash_flows) are deleted and re-inserted;
     global tables (instruments, corporate_actions) are upserted by key.
-    Running this repeatedly is idempotent.
+    Running this repeatedly is idempotent. On success the session is
+    committed; on any error it is rolled back before the exception
+    propagates, so the session is always left clean for the caller.
     """
-    account = upsert_account(session, ledger.read_account())
-    instruments = project_instruments(session, ledger)
-    project_trades(session, account, ledger, instruments)
-    project_cash_flows(session, account, ledger, instruments)
-    project_corporate_actions(session, ledger, instruments)
-    session.commit()
-    return account
+    try:
+        account = upsert_account(session, ledger.read_account())
+        instruments = project_instruments(session, ledger)
+        project_trades(session, account, ledger, instruments)
+        project_cash_flows(session, account, ledger, instruments)
+        project_corporate_actions(session, ledger, instruments)
+        session.commit()
+        return account
+    except Exception:
+        session.rollback()
+        raise
