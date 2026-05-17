@@ -159,7 +159,9 @@ class Trade(ProvenanceMixin, TimestampMixin, Base):
 
     quantity: Mapped[Decimal] = mapped_column(_MONEY)
     price: Mapped[Decimal] = mapped_column(_MONEY)
-    realized_pnl: Mapped[Decimal | None] = mapped_column(_MONEY, nullable=True)
+    # Realized P&L as reported by IBKR — kept for cross-checking against the
+    # self-built P&L engine.
+    realized_pnl_ibkr: Mapped[Decimal | None] = mapped_column(_MONEY, nullable=True)
 
     # Original trade currency plus its conversion into USD
     # (decision #2 — dual-currency storage; USD amounts NOT NULL).

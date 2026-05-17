@@ -232,6 +232,15 @@ def test_corporate_action_round_trip(db_session, instrument):
     assert action.ratio == Decimal("10.0")
 
 
+def test_trade_realized_pnl_ibkr_optional(db_session, account, instrument):
+    trade = _make_trade(account, instrument)
+    db_session.add(trade)
+    db_session.commit()
+    db_session.refresh(trade)
+
+    assert trade.realized_pnl_ibkr is None
+
+
 # --- provenance -----------------------------------------------------------
 
 
