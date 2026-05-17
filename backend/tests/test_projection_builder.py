@@ -12,7 +12,7 @@ from app.db.enums import (
     CorporateActionType,
     TradeSide,
 )
-from app.db.models import Account, Instrument, Trade
+from app.db.models import Account, CashFlow, Instrument, Trade
 from app.services.ledger.account_ledger import AccountLedger
 from app.services.ledger.rows import (
     LedgerAccount,
@@ -180,3 +180,44 @@ def test_project_trades_unknown_instrument_raises(db_session, tmp_path):
 
     with pytest.raises(ValueError, match="GHOST"):
         builder.project_trades(db_session, account, ledger, instruments)
+
+
+# --- cash flows -----------------------------------------------------------
+
+
+def test_project_cash_flows_inserts(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.instruments.append([_li("AAPL")])
+    ledger.cash_flows.append([_lc(external_id="DIV-1")])
+
+    account = builder.upsert_account(db_session, ledger.read_account())
+    instruments = builder.project_instruments(db_session, ledger)
+    builder.project_cash_flows(db_session, account, ledger, instruments)
+
+    flow = db_session.scalars(select(CashFlow)).one()
+    assert flow.account_id == account.id
+    assert flow.instrument_id == instruments["AAPL"].id
+    assert flow.amount == Decimal("22.00")  # mapped from amount_orig
+
+
+def test_project_cash_flows_deposit_without_instrument(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.cash_flows.append(
+        [
+            _lc(
+                flow_type=CashFlowType.DEPOSIT,
+                instrument=None,
+                amount_orig=Decimal("5000"),
+                amount_usd=Decimal("5000"),
+                external_id="DEP-1",
+            )
+        ]
+    )
+
+    account = builder.upsert_account(db_session, ledger.read_account())
+    instruments = builder.project_instruments(db_session, ledger)
+    builder.project_cash_flows(db_session, account, ledger, instruments)
+
+    flow = db_session.scalars(select(CashFlow)).one()
+    assert flow.instrument_id is None
+    assert flow.amount == Decimal("5000")

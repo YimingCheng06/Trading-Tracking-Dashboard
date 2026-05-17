@@ -11,7 +11,7 @@ in a later milestone.
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Account, Instrument, Trade
+from app.db.models import Account, CashFlow, Instrument, Trade
 from app.services.ledger.account_ledger import AccountLedger
 from app.services.ledger.rows import LedgerAccount, LedgerInstrument
 
@@ -111,6 +111,47 @@ def project_trades(
                 executed_at=lt.executed_at,
                 source=lt.source,
                 import_batch=lt.import_batch,
+            )
+        )
+    session.flush()
+
+
+def project_cash_flows(
+    session: Session,
+    account: Account,
+    ledger: AccountLedger,
+    instruments: dict[str, Instrument],
+) -> None:
+    """Delete this account's cash flows, then re-insert them from the ledger.
+
+    Raises ValueError if a flow references an unknown instrument; on that
+    error the session is left uncommitted and the caller must roll back.
+    """
+    session.execute(delete(CashFlow).where(CashFlow.account_id == account.id))
+    for lc in ledger.cash_flows.read():
+        instrument_id = None
+        if lc.instrument is not None:
+            inst = instruments.get(lc.instrument)
+            if inst is None:
+                raise ValueError(
+                    f"cash flow references unknown instrument "
+                    f"{lc.instrument!r} (not in instruments.csv)"
+                )
+            instrument_id = inst.id
+        session.add(
+            CashFlow(
+                account_id=account.id,
+                instrument_id=instrument_id,
+                flow_type=lc.flow_type,
+                amount=lc.amount_orig,
+                currency=lc.currency,
+                fx_rate_to_usd=lc.fx_rate_to_usd,
+                amount_usd=lc.amount_usd,
+                description=lc.description,
+                external_id=lc.external_id,
+                occurred_at=lc.occurred_at,
+                source=lc.source,
+                import_batch=lc.import_batch,
             )
         )
     session.flush()
