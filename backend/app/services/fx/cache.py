@@ -22,7 +22,11 @@ class FxRateCache:
             return None
         with self.path.open(newline="") as f:
             for row in csv.DictReader(f):
-                if row["base"] == currency and row["date"] == on_date.isoformat():
+                if (
+                    row["base"] == currency
+                    and row["quote"] == "USD"
+                    and row["date"] == on_date.isoformat()
+                ):
                     return Decimal(row["rate"])
         return None
 

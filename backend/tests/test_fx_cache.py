@@ -29,3 +29,12 @@ def test_csv_header_columns(tmp_path):
     FxRateCache(path).put("EUR", date(2026, 1, 15), Decimal("1.08"))
     header = path.read_text().splitlines()[0]
     assert header == "date,base,quote,rate"
+
+
+def test_duplicate_put_keeps_first_value(tmp_path):
+    """put appends; get returns the first cached value for a key."""
+    cache = FxRateCache(tmp_path / "fx_rates.csv")
+    cache.put("EUR", date(2026, 1, 15), Decimal("1.08"))
+    cache.put("EUR", date(2026, 1, 15), Decimal("9.99"))
+
+    assert cache.get("EUR", date(2026, 1, 15)) == Decimal("1.08")
