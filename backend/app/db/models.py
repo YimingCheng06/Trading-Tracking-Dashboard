@@ -8,7 +8,6 @@ once converted to USD — so P&L can be reported in a single currency without
 re-deriving FX after the fact.
 """
 
-import enum
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -23,55 +22,20 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.enums import (
+    AssetClass,
+    CashFlowType,
+    CorporateActionType,
+    OpenClose,
+    OptionType,
+    RecordSource,
+    TradeSide,
+)
 
 # Numeric column shapes. Amounts/prices/quantities share one shape; FX rates
 # get extra scale because cross-rates carry more significant digits.
 _MONEY = Numeric(20, 6)
 _FX = Numeric(20, 10)
-
-
-class AssetClass(enum.Enum):
-    STOCK = "STOCK"
-    ETF = "ETF"
-    OPTION = "OPTION"
-
-
-class OptionType(enum.Enum):
-    CALL = "CALL"
-    PUT = "PUT"
-
-
-class TradeSide(enum.Enum):
-    BUY = "BUY"
-    SELL = "SELL"
-
-
-class OpenClose(enum.Enum):
-    OPEN = "OPEN"
-    CLOSE = "CLOSE"
-
-
-class CashFlowType(enum.Enum):
-    DEPOSIT = "DEPOSIT"
-    WITHDRAWAL = "WITHDRAWAL"
-    DIVIDEND = "DIVIDEND"
-    INTEREST = "INTEREST"
-    FEE = "FEE"
-    OTHER = "OTHER"
-
-
-class CorporateActionType(enum.Enum):
-    SPLIT = "SPLIT"
-    CASH_DIVIDEND = "CASH_DIVIDEND"
-    STOCK_DIVIDEND = "STOCK_DIVIDEND"
-    MERGER = "MERGER"
-    SPINOFF = "SPINOFF"
-    SYMBOL_CHANGE = "SYMBOL_CHANGE"
-
-
-class RecordSource(enum.Enum):
-    PARSED = "PARSED"
-    MANUAL = "MANUAL"
 
 
 class TimestampMixin:
