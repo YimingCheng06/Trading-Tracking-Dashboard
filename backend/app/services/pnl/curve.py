@@ -60,10 +60,23 @@ def _mode_a(points: list[DayPoint]) -> list[CurvePoint]:
     return curve
 
 
+def _mode_b(points: list[DayPoint]) -> list[CurvePoint]:
+    """Capital-adjusted: cumulative P&L over the final total net deposits."""
+    cumulative = _cumulative(points)
+    final_deposits = cumulative[-1][0] if cumulative else Decimal("0")
+    curve: list[CurvePoint] = []
+    for p, (_, cum_pnl) in zip(points, cumulative, strict=True):
+        pct = cum_pnl / final_deposits if final_deposits > 0 else None
+        curve.append(CurvePoint(p.on_date, cum_pnl, pct))
+    return curve
+
+
 def compute_equity_curve(
     points: list[DayPoint], mode: Literal["A", "B"]
 ) -> list[CurvePoint]:
     """Build the equity curve for `mode` over a chronological daily series."""
     if mode == "A":
         return _mode_a(points)
+    if mode == "B":
+        return _mode_b(points)
     raise ValueError(f"unknown equity-curve mode {mode!r}")
