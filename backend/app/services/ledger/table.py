@@ -3,6 +3,10 @@
 `read()` parses every row through the Pydantic row model. `append()` writes
 only rows whose `dedup_key` is not already present — in the file or earlier
 in the same batch — so re-importing a statement never duplicates rows.
+`read()` raises `pydantic.ValidationError` if a row is missing a required
+field (e.g. a blank `trade_id`) — corrupt rows are surfaced, not skipped.
+`append()` is not safe under concurrent writers; this subsystem assumes a
+single-user local app.
 """
 
 import csv
@@ -43,7 +47,7 @@ class LedgerTable[RowT: BaseModel]:
             seen.add(row.dedup_key)
             fresh.append(row)
 
-        write_header = not self.path.exists()
+        write_header = not self.path.exists() or self.path.stat().st_size == 0
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fieldnames = list(self.row_model.model_fields)
         with self.path.open("a", newline="") as f:

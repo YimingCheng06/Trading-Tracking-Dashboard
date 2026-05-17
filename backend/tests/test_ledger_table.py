@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from app.db.enums import TradeSide
-from app.services.ledger.rows import LedgerTrade
+from app.db.enums import AssetClass, OptionType, TradeSide
+from app.services.ledger.rows import LedgerInstrument, LedgerTrade
 from app.services.ledger.table import LedgerTable
 
 
@@ -63,3 +63,34 @@ def test_csv_has_provenance_columns_first(tmp_path):
     LedgerTable(path, LedgerTrade).append([_trade("EXEC-1")])
     header = path.read_text().splitlines()[0]
     assert header.startswith("source,import_batch,trade_id,")
+
+
+def test_append_writes_header_when_file_exists_but_empty(tmp_path):
+    path = tmp_path / "trades.csv"
+    path.touch()  # pre-existing 0-byte file
+    table = LedgerTable(path, LedgerTrade)
+    table.append([_trade("EXEC-1")])
+
+    assert [r.trade_id for r in table.read()] == ["EXEC-1"]
+
+
+def test_instrument_round_trips_with_date_and_option_fields(tmp_path):
+    table = LedgerTable(tmp_path / "instruments.csv", LedgerInstrument)
+    opt = LedgerInstrument(
+        symbol="AAPL 250117C00200000",
+        asset_class=AssetClass.OPTION,
+        currency="USD",
+        option_type=OptionType.CALL,
+        strike=Decimal("200"),
+        expiry=date(2025, 1, 17),
+        multiplier=100,
+    )
+    table.append([opt])
+
+    read_back = table.read()[0]
+    assert read_back.asset_class == AssetClass.OPTION
+    assert read_back.option_type == OptionType.CALL
+    assert read_back.strike == Decimal("200")
+    assert read_back.expiry == date(2025, 1, 17)
+    assert read_back.multiplier == 100
+    assert read_back.exchange is None
