@@ -20,9 +20,9 @@ from typing import Literal
 class DayPoint:
     on_date: date
     portfolio_value: Decimal  # total account value at end of day, USD
-    net_flow: Decimal  # external deposits minus withdrawals; treated as
-    # arriving at the START of the day (the TWR formula subtracts it from
-    # the day's closing value before measuring the return).
+    net_flow: Decimal  # external deposits minus withdrawals that day. The
+    # Mode A return excludes this flow — it is treated as occurring at the
+    # END of the day, so a deposit does not inflate that day's return.
 
 
 @dataclass(frozen=True)
