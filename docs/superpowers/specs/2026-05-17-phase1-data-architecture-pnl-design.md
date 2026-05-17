@@ -117,7 +117,8 @@ SQLAlchemy 2.0 typed `Mapped` 风格,定义在 `backend/app/db/models.py`。SQLi
 
 - 账本与数据库金额一律 USD;每条带金额的记录保留 `原始货币 + 原始金额 + fx_rate_to_usd + USD 金额`。
 - USD 金额列命名 `*_usd`(`proceeds_usd`、`commission_usd`、`amount_usd`、`market_value_usd`、`unrealized_pnl_usd`),`fx_rate_to_usd` 为所用汇率。
-- 折算在解析/入库时完成,故 `*_usd` 与 `fx_rate_to_usd` 为 **NOT NULL**(USD 交易 fx_rate = 1)。
+- 折算在解析/入库时完成,故 `trades` 与 `cash_flows` 的 `*_usd` 与 `fx_rate_to_usd` 为 **NOT NULL**(USD 交易 fx_rate = 1)。
+- 例外:`positions_snapshot` 的 `market_value(_usd)`、`unrealized_pnl(_usd)` 依赖后续行情快照(Phase 1.4),保持**可空**。
 
 ### 4.3 溯源列
 
