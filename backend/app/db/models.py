@@ -69,6 +69,11 @@ class CorporateActionType(enum.Enum):
     SYMBOL_CHANGE = "SYMBOL_CHANGE"
 
 
+class RecordSource(enum.Enum):
+    PARSED = "PARSED"
+    MANUAL = "MANUAL"
+
+
 class TimestampMixin:
     """created_at / updated_at maintained by the database."""
 
@@ -78,6 +83,13 @@ class TimestampMixin:
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class ProvenanceMixin:
+    """source / import_batch — 区分解析得来的行与用户手改/新增的行。"""
+
+    source: Mapped[RecordSource] = mapped_column(default=RecordSource.PARSED)
+    import_batch: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class Account(TimestampMixin, Base):
@@ -96,7 +108,7 @@ class Account(TimestampMixin, Base):
     )
 
 
-class Instrument(TimestampMixin, Base):
+class Instrument(ProvenanceMixin, TimestampMixin, Base):
     __tablename__ = "instruments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -128,7 +140,7 @@ class Instrument(TimestampMixin, Base):
     )
 
 
-class Trade(TimestampMixin, Base):
+class Trade(ProvenanceMixin, TimestampMixin, Base):
     __tablename__ = "trades"
     # Same broker execution can never land twice for one account — the import
     # de-duplication guarantee, enforced at the database level.
@@ -166,7 +178,7 @@ class Trade(TimestampMixin, Base):
     instrument: Mapped[Instrument] = relationship(back_populates="trades")
 
 
-class CashFlow(TimestampMixin, Base):
+class CashFlow(ProvenanceMixin, TimestampMixin, Base):
     __tablename__ = "cash_flows"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -228,7 +240,7 @@ class PositionSnapshot(TimestampMixin, Base):
     instrument: Mapped[Instrument] = relationship(back_populates="snapshots")
 
 
-class CorporateAction(TimestampMixin, Base):
+class CorporateAction(ProvenanceMixin, TimestampMixin, Base):
     __tablename__ = "corporate_actions"
 
     id: Mapped[int] = mapped_column(primary_key=True)

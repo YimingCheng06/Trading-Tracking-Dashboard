@@ -224,3 +224,32 @@ def test_corporate_action_round_trip(db_session, instrument):
     assert action.id is not None
     assert action.action_type == models.CorporateActionType.SPLIT
     assert action.ratio == Decimal("10.0")
+
+
+# --- provenance -----------------------------------------------------------
+
+
+def test_trade_source_defaults_to_parsed(db_session, account, instrument):
+    trade = _make_trade(account, instrument)
+    db_session.add(trade)
+    db_session.commit()
+    db_session.refresh(trade)
+
+    assert trade.source == models.RecordSource.PARSED
+    assert trade.import_batch is None
+
+
+def test_instrument_can_be_marked_manual(db_session):
+    inst = models.Instrument(
+        symbol="MSFT",
+        asset_class=models.AssetClass.STOCK,
+        currency="USD",
+        source=models.RecordSource.MANUAL,
+        import_batch="manual",
+    )
+    db_session.add(inst)
+    db_session.commit()
+    db_session.refresh(inst)
+
+    assert inst.source == models.RecordSource.MANUAL
+    assert inst.import_batch == "manual"
