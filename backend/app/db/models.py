@@ -4,8 +4,8 @@ Six tables back the import + P&L pipeline: accounts, instruments, trades,
 cash_flows, positions_snapshot, corporate_actions.
 
 Money is stored twice where it matters — once in the trade's own currency and
-once converted to the account base currency — so P&L can be reported in a
-single base currency without re-deriving FX after the fact.
+once converted to USD — so P&L can be reported in a single currency without
+re-deriving FX after the fact.
 """
 
 import enum
@@ -159,18 +159,16 @@ class Trade(ProvenanceMixin, TimestampMixin, Base):
 
     quantity: Mapped[Decimal] = mapped_column(_MONEY)
     price: Mapped[Decimal] = mapped_column(_MONEY)
-    proceeds: Mapped[Decimal] = mapped_column(_MONEY)
-    commission: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
     realized_pnl: Mapped[Decimal | None] = mapped_column(_MONEY, nullable=True)
 
-    # Original trade currency plus its conversion into the account base
-    # currency (decision #2 — dual-currency storage).
+    # Original trade currency plus its conversion into USD
+    # (decision #2 — dual-currency storage; USD amounts NOT NULL).
     currency: Mapped[str] = mapped_column(String(3))
-    fx_rate_to_base: Mapped[Decimal | None] = mapped_column(_FX, nullable=True)
-    proceeds_base: Mapped[Decimal | None] = mapped_column(_MONEY, nullable=True)
-    commission_base: Mapped[Decimal | None] = mapped_column(
-        _MONEY, nullable=True
-    )
+    fx_rate_to_usd: Mapped[Decimal] = mapped_column(_FX)
+    proceeds: Mapped[Decimal] = mapped_column(_MONEY)
+    proceeds_usd: Mapped[Decimal] = mapped_column(_MONEY)
+    commission: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
+    commission_usd: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"))
 
     executed_at: Mapped[datetime] = mapped_column(DateTime)
 
@@ -191,8 +189,8 @@ class CashFlow(ProvenanceMixin, TimestampMixin, Base):
     flow_type: Mapped[CashFlowType] = mapped_column()
     amount: Mapped[Decimal] = mapped_column(_MONEY)
     currency: Mapped[str] = mapped_column(String(3))
-    fx_rate_to_base: Mapped[Decimal | None] = mapped_column(_FX, nullable=True)
-    amount_base: Mapped[Decimal | None] = mapped_column(_MONEY, nullable=True)
+    fx_rate_to_usd: Mapped[Decimal] = mapped_column(_FX)
+    amount_usd: Mapped[Decimal] = mapped_column(_MONEY)
 
     description: Mapped[str | None] = mapped_column(String(256), nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -226,15 +224,9 @@ class PositionSnapshot(TimestampMixin, Base):
     avg_cost: Mapped[Decimal] = mapped_column(_MONEY)
     market_price: Mapped[Decimal | None] = mapped_column(_MONEY, nullable=True)
     market_value: Mapped[Decimal | None] = mapped_column(_MONEY, nullable=True)
-    market_value_base: Mapped[Decimal | None] = mapped_column(
-        _MONEY, nullable=True
-    )
-    unrealized_pnl: Mapped[Decimal | None] = mapped_column(
-        _MONEY, nullable=True
-    )
-    unrealized_pnl_base: Mapped[Decimal | None] = mapped_column(
-        _MONEY, nullable=True
-    )
+    market_value_usd: Mapped[Decimal | None] = mapped_column(_MONEY, nullable=True)
+    unrealized_pnl: Mapped[Decimal | None] = mapped_column(_MONEY, nullable=True)
+    unrealized_pnl_usd: Mapped[Decimal | None] = mapped_column(_MONEY, nullable=True)
 
     account: Mapped[Account] = relationship(back_populates="snapshots")
     instrument: Mapped[Instrument] = relationship(back_populates="snapshots")

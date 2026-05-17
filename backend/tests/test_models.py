@@ -83,9 +83,12 @@ def _make_trade(account, instrument, **overrides):
         side=models.TradeSide.BUY,
         quantity=Decimal("10"),
         price=Decimal("150.25"),
-        proceeds=Decimal("-1502.50"),
-        commission=Decimal("1.00"),
         currency="USD",
+        fx_rate_to_usd=Decimal("1.0"),
+        proceeds=Decimal("-1502.50"),
+        proceeds_usd=Decimal("-1502.50"),
+        commission=Decimal("1.00"),
+        commission_usd=Decimal("1.00"),
         executed_at=datetime(2026, 1, 5, 14, 30),
     )
     fields.update(overrides)
@@ -96,19 +99,20 @@ def test_trade_round_trip_dual_currency(db_session, account, instrument):
     trade = _make_trade(
         account,
         instrument,
-        fx_rate_to_base=Decimal("1.0"),
-        proceeds_base=Decimal("-1502.50"),
-        commission_base=Decimal("1.00"),
+        currency="EUR",
+        fx_rate_to_usd=Decimal("1.08"),
+        proceeds=Decimal("-1390.00"),
+        proceeds_usd=Decimal("-1501.20"),
     )
     db_session.add(trade)
     db_session.commit()
     db_session.refresh(trade)
 
     assert trade.id is not None
-    assert trade.side == models.TradeSide.BUY
-    assert trade.proceeds == Decimal("-1502.50")
-    assert trade.proceeds_base == Decimal("-1502.50")
-    assert trade.fx_rate_to_base == Decimal("1.0")
+    assert trade.currency == "EUR"
+    assert trade.proceeds == Decimal("-1390.00")
+    assert trade.proceeds_usd == Decimal("-1501.20")
+    assert trade.fx_rate_to_usd == Decimal("1.08")
 
 
 def test_trade_relationships(db_session, account, instrument):
@@ -140,8 +144,8 @@ def test_cash_flow_round_trip(db_session, account, instrument):
         flow_type=models.CashFlowType.DIVIDEND,
         amount=Decimal("22.00"),
         currency="USD",
-        amount_base=Decimal("22.00"),
-        fx_rate_to_base=Decimal("1.0"),
+        fx_rate_to_usd=Decimal("1.0"),
+        amount_usd=Decimal("22.00"),
         occurred_at=datetime(2026, 2, 14, 0, 0),
     )
     db_session.add(flow)
@@ -159,6 +163,8 @@ def test_cash_flow_deposit_without_instrument(db_session, account):
         flow_type=models.CashFlowType.DEPOSIT,
         amount=Decimal("5000.00"),
         currency="USD",
+        fx_rate_to_usd=Decimal("1.0"),
+        amount_usd=Decimal("5000.00"),
         occurred_at=datetime(2026, 1, 1, 0, 0),
     )
     db_session.add(flow)
