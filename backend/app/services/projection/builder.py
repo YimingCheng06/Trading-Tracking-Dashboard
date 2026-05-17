@@ -8,7 +8,7 @@ positions_snapshot is NOT projected here — it is derived from market data
 in a later milestone.
 """
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Account, Instrument, Trade
@@ -78,8 +78,13 @@ def project_trades(
     ledger: AccountLedger,
     instruments: dict[str, Instrument],
 ) -> None:
-    """Delete this account's trades, then re-insert them from the ledger."""
-    session.query(Trade).filter_by(account_id=account.id).delete()
+    """Delete this account's trades, then re-insert them from the ledger.
+
+    If a trade references an unknown instrument the function raises ``ValueError``
+    and the session is left uncommitted — the caller is responsible for rollback.
+    """
+    # Account-scoped full rebuild: drop this account's trades, then re-insert.
+    session.execute(delete(Trade).where(Trade.account_id == account.id))
     for lt in ledger.trades.read():
         inst = instruments.get(lt.instrument)
         if inst is None:
