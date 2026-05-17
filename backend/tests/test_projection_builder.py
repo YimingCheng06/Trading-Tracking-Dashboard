@@ -10,6 +10,7 @@ from app.db.enums import (
     AssetClass,
     CashFlowType,
     CorporateActionType,
+    OptionType,
     TradeSide,
 )
 from app.db.models import Account, CashFlow, CorporateAction, Instrument, Trade
@@ -314,3 +315,54 @@ def test_rebuild_account_rolls_back_on_error(db_session, tmp_path):
 
     # The failed rebuild must leave the session clean — no partial account row.
     assert db_session.scalar(select(func.count()).select_from(Account)) == 0
+
+
+# --- duplicate symbol guard -----------------------------------------------
+
+
+def test_project_instruments_rejects_duplicate_symbol(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    # Two instrument rows sharing one symbol — silently collapsing them would
+    # mis-resolve trades, so this must raise.
+    ledger.instruments.append(
+        [_li("AAPL", name="Apple"), _li("AAPL", asset_class=AssetClass.ETF)]
+    )
+
+    with pytest.raises(ValueError, match="AAPL"):
+        builder.project_instruments(db_session, ledger)
+
+
+def test_project_instruments_handles_option(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.instruments.append(
+        [
+            _li(
+                "AAPL 250117C00200000",
+                asset_class=AssetClass.OPTION,
+                option_type=OptionType.CALL,
+                strike=Decimal("200"),
+                expiry=date(2025, 1, 17),
+                multiplier=100,
+            )
+        ]
+    )
+
+    mapping = builder.project_instruments(db_session, ledger)
+
+    inst = mapping["AAPL 250117C00200000"]
+    assert inst.asset_class == AssetClass.OPTION
+    assert inst.option_type == OptionType.CALL
+    assert inst.strike == Decimal("200")
+    assert inst.expiry == date(2025, 1, 17)
+    assert inst.multiplier == 100
+
+
+def test_project_cash_flows_unknown_instrument_raises(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.cash_flows.append([_lc(instrument="GHOST", external_id="X1")])
+
+    account = builder.upsert_account(db_session, ledger.read_account())
+    instruments = builder.project_instruments(db_session, ledger)  # empty
+
+    with pytest.raises(ValueError, match="GHOST"):
+        builder.project_cash_flows(db_session, account, ledger, instruments)

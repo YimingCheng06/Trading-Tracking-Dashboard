@@ -65,11 +65,20 @@ def upsert_instrument(session: Session, li: LedgerInstrument) -> Instrument:
 def project_instruments(
     session: Session, ledger: AccountLedger
 ) -> dict[str, Instrument]:
-    """Upsert every instrument in the ledger; return a symbol -> Instrument map."""
-    return {
-        li.symbol: upsert_instrument(session, li)
-        for li in ledger.instruments.read()
-    }
+    """Upsert every instrument in the ledger; return a symbol -> Instrument map.
+
+    Raises ValueError if two ledger rows share a symbol — trades and cash
+    flows resolve their instrument by this symbol, so it must be unique.
+    """
+    mapping: dict[str, Instrument] = {}
+    for li in ledger.instruments.read():
+        if li.symbol in mapping:
+            raise ValueError(
+                f"duplicate instrument symbol {li.symbol!r} in ledger — "
+                f"instrument symbols must be unique"
+            )
+        mapping[li.symbol] = upsert_instrument(session, li)
+    return mapping
 
 
 def project_trades(
