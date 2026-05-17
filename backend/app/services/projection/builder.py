@@ -11,9 +11,9 @@ in a later milestone.
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Account
+from app.db.models import Account, Instrument
 from app.services.ledger.account_ledger import AccountLedger
-from app.services.ledger.rows import LedgerAccount
+from app.services.ledger.rows import LedgerAccount, LedgerInstrument
 
 
 def upsert_account(session: Session, ledger_account: LedgerAccount) -> Account:
@@ -31,6 +31,45 @@ def upsert_account(session: Session, ledger_account: LedgerAccount) -> Account:
     account.broker = ledger_account.broker
     session.flush()
     return account
+
+
+def upsert_instrument(session: Session, li: LedgerInstrument) -> Instrument:
+    """Find the Instrument by its natural key, or create it; update its fields."""
+    inst = session.scalar(
+        select(Instrument).where(
+            Instrument.symbol == li.symbol,
+            Instrument.asset_class == li.asset_class,
+            Instrument.strike == li.strike,
+            Instrument.expiry == li.expiry,
+            Instrument.option_type == li.option_type,
+        )
+    )
+    if inst is None:
+        inst = Instrument(symbol=li.symbol, asset_class=li.asset_class)
+        session.add(inst)
+    inst.currency = li.currency
+    inst.exchange = li.exchange
+    inst.name = li.name
+    inst.conid = li.conid
+    inst.underlying_symbol = li.underlying_symbol
+    inst.option_type = li.option_type
+    inst.strike = li.strike
+    inst.expiry = li.expiry
+    inst.multiplier = li.multiplier
+    inst.source = li.source
+    inst.import_batch = li.import_batch
+    session.flush()
+    return inst
+
+
+def project_instruments(
+    session: Session, ledger: AccountLedger
+) -> dict[str, Instrument]:
+    """Upsert every instrument in the ledger; return a symbol -> Instrument map."""
+    return {
+        li.symbol: upsert_instrument(session, li)
+        for li in ledger.instruments.read()
+    }
 
 
 def rebuild_account(session: Session, ledger: AccountLedger) -> Account:

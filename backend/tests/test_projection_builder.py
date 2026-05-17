@@ -11,7 +11,7 @@ from app.db.enums import (
     CorporateActionType,
     TradeSide,
 )
-from app.db.models import Account
+from app.db.models import Account, Instrument
 from app.services.ledger.account_ledger import AccountLedger
 from app.services.ledger.rows import (
     LedgerAccount,
@@ -104,3 +104,33 @@ def test_upsert_account_updates_existing(db_session, tmp_path):
 
     assert again.name == "Renamed"
     assert db_session.scalar(select(func.count()).select_from(Account)) == 1
+
+
+# --- instruments ----------------------------------------------------------
+
+
+def test_upsert_instrument_creates(db_session):
+    inst = builder.upsert_instrument(db_session, _li("MSFT"))
+
+    assert inst.id is not None
+    assert inst.symbol == "MSFT"
+    assert db_session.scalar(select(func.count()).select_from(Instrument)) == 1
+
+
+def test_upsert_instrument_updates_existing(db_session):
+    builder.upsert_instrument(db_session, _li("AAPL", name="Apple Inc."))
+    again = builder.upsert_instrument(db_session, _li("AAPL", name="Apple Corrected"))
+
+    assert again.name == "Apple Corrected"
+    assert db_session.scalar(select(func.count()).select_from(Instrument)) == 1
+
+
+def test_project_instruments_returns_symbol_map(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.instruments.append([_li("AAPL"), _li("MSFT")])
+
+    mapping = builder.project_instruments(db_session, ledger)
+
+    assert set(mapping) == {"AAPL", "MSFT"}
+    assert mapping["AAPL"].id is not None
+    assert db_session.scalar(select(func.count()).select_from(Instrument)) == 2
