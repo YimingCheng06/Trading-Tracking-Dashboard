@@ -252,3 +252,13 @@ def test_project_corporate_actions_idempotent(db_session, tmp_path):
     assert (
         db_session.scalar(select(func.count()).select_from(CorporateAction)) == 1
     )
+
+
+def test_project_corporate_actions_unknown_instrument_raises(db_session, tmp_path):
+    ledger = _ledger(tmp_path)
+    ledger.corporate_actions.append([_lca(instrument="GHOST")])
+
+    instruments = builder.project_instruments(db_session, ledger)  # empty
+
+    with pytest.raises(ValueError, match="GHOST"):
+        builder.project_corporate_actions(db_session, ledger, instruments)
