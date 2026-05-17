@@ -17,7 +17,13 @@ from app.services.ledger.rows import (
 from app.services.ledger.table import LedgerTable
 
 
+def _toml_str(value: str) -> str:
+    """Escape a string for a TOML basic-string literal."""
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 class AccountLedger:
+    """One account's CSV ledger directory: 4 record tables plus account.toml."""
     def __init__(self, root: Path) -> None:
         self.root = root
         self.instruments: LedgerTable[LedgerInstrument] = LedgerTable(
@@ -38,10 +44,10 @@ class AccountLedger:
         root = accounts_dir / account.broker_account_id
         root.mkdir(parents=True, exist_ok=True)
         lines = [
-            f'broker_account_id = "{account.broker_account_id}"',
-            f'name = "{account.name}"',
-            f'base_currency = "{account.base_currency}"',
-            f'broker = "{account.broker}"',
+            f'broker_account_id = "{_toml_str(account.broker_account_id)}"',
+            f'name = "{_toml_str(account.name)}"',
+            f'base_currency = "{_toml_str(account.base_currency)}"',
+            f'broker = "{_toml_str(account.broker)}"',
         ]
         (root / "account.toml").write_text("\n".join(lines) + "\n")
         return cls(root)

@@ -34,3 +34,15 @@ def test_exposes_four_named_tables(tmp_path):
         ledger.corporate_actions.path
         == tmp_path / "U1" / "corporate_actions.csv"
     )
+
+
+def test_account_name_with_special_chars_round_trips(tmp_path):
+    acct = LedgerAccount(
+        broker_account_id="U9",
+        name='My "Pro" \\ Account',
+        base_currency="USD",
+    )
+    AccountLedger.create(tmp_path, acct)
+
+    reloaded = AccountLedger(tmp_path / "U9").read_account()
+    assert reloaded.name == 'My "Pro" \\ Account'
