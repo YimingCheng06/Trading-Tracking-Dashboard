@@ -66,3 +66,23 @@ def test_fifo_open_position_after_partial_sell():
 def test_fifo_sell_exceeding_position_raises():
     with pytest.raises(ValueError, match="exceeds open position"):
         run_fifo([_trade(TradeSide.SELL, 5, "600", trade_id="S9")])
+
+
+def test_fifo_zero_quantity_raises():
+    with pytest.raises(ValueError, match="zero quantity"):
+        run_fifo([_trade(TradeSide.BUY, 0, "0", trade_id="Z1")])
+
+
+def test_fifo_sell_exactly_empties_first_lot():
+    # Buy 10 @100, buy 10 @110, sell exactly 10 — first lot fully consumed,
+    # second lot left intact.
+    result = run_fifo(
+        [
+            _trade(TradeSide.BUY, 10, "-1000", trade_id="B1"),
+            _trade(TradeSide.BUY, 10, "-1100", trade_id="B2"),
+            _trade(TradeSide.SELL, 10, "1200", trade_id="S1"),
+        ]
+    )
+    assert result.realized_pnl == Decimal("200")  # 10 * (120 - 100)
+    assert result.open_quantity == Decimal("10")
+    assert result.open_cost_basis == Decimal("1100")  # 10 units @110
