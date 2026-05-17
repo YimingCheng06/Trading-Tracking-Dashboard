@@ -5,6 +5,8 @@ only rows whose `dedup_key` is not already present — in the file or earlier
 in the same batch — so re-importing a statement never duplicates rows.
 `read()` raises `pydantic.ValidationError` if a row is missing a required
 field (e.g. a blank `trade_id`) — corrupt rows are surfaced, not skipped.
+`append()` raises `ValueError` if an existing file's header does not match
+the row model's fields, preventing silent ragged-file corruption.
 `append()` is not safe under concurrent writers; this subsystem assumes a
 single-user local app.
 """
@@ -50,6 +52,14 @@ class LedgerTable[RowT: BaseModel]:
         write_header = not self.path.exists() or self.path.stat().st_size == 0
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fieldnames = list(self.row_model.model_fields)
+        if not write_header:
+            with self.path.open(newline="") as f:
+                existing_header = next(csv.reader(f), [])
+            if existing_header != fieldnames:
+                raise ValueError(
+                    f"{self.path} header {existing_header} does not match "
+                    f"row model fields {fieldnames}"
+                )
         with self.path.open("a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             if write_header:

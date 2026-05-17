@@ -1,6 +1,8 @@
 from datetime import date, datetime
 from decimal import Decimal
 
+import pytest
+
 from app.db.enums import AssetClass, OptionType, TradeSide
 from app.services.ledger.rows import LedgerInstrument, LedgerTrade
 from app.services.ledger.table import LedgerTable
@@ -94,3 +96,13 @@ def test_instrument_round_trips_with_date_and_option_fields(tmp_path):
     assert read_back.expiry == date(2025, 1, 17)
     assert read_back.multiplier == 100
     assert read_back.exchange is None
+
+
+def test_append_raises_on_header_mismatch(tmp_path):
+    path = tmp_path / "trades.csv"
+    # A file whose header has an unexpected extra column.
+    path.write_text("source,import_batch,trade_id,UNEXPECTED\n")
+    table = LedgerTable(path, LedgerTrade)
+
+    with pytest.raises(ValueError, match="header"):
+        table.append([_trade("EXEC-1")])
