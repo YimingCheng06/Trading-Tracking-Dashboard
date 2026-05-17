@@ -20,7 +20,9 @@ from typing import Literal
 class DayPoint:
     on_date: date
     portfolio_value: Decimal  # total account value at end of day, USD
-    net_flow: Decimal         # external deposits minus withdrawals that day
+    net_flow: Decimal  # external deposits minus withdrawals; treated as
+    # arriving at the START of the day (the TWR formula subtracts it from
+    # the day's closing value before measuring the return).
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,8 @@ def _mode_a(points: list[DayPoint]) -> list[CurvePoint]:
     cum_factor = Decimal("1")
     prev_value = Decimal("0")
     for p, (_, cum_pnl) in zip(points, _cumulative(points), strict=True):
+        # A zero prior value (e.g. a total loss, or before the first
+        # deposit) yields a 0 return — TWR cannot recover from a 100% loss.
         if prev_value > 0:
             daily_return = (p.portfolio_value - p.net_flow) / prev_value - 1
         else:

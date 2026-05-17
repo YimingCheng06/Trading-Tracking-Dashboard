@@ -32,3 +32,7 @@ def test_unknown_mode_raises():
 
     with pytest.raises(ValueError, match="mode"):
         compute_equity_curve([], "Z")
+
+
+def test_mode_a_empty_returns_empty():
+    assert compute_equity_curve([], "A") == []
