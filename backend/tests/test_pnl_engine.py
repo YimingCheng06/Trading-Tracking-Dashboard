@@ -1,8 +1,10 @@
 from datetime import datetime
 from decimal import Decimal
 
-from app.db.enums import TradeSide
-from app.db.models import Trade
+import pytest
+
+from app.db.enums import AssetClass, TradeSide
+from app.db.models import Instrument, Trade
 from app.services.pnl.engine import compute_positions, compute_realized_pnl
 
 
@@ -24,17 +26,27 @@ def _db_trade(account, instrument, side, quantity, proceeds_usd, *, trade_id, ex
 
 
 def test_compute_realized_pnl_sums_across_instruments(db_session, account, instrument):
+    # A second instrument, so the test genuinely exercises cross-instrument summation.
+    other = Instrument(symbol="MSFT", asset_class=AssetClass.STOCK, currency="USD")
+    db_session.add(other)
+    db_session.flush()
+
     db_session.add_all(
         [
             _db_trade(account, instrument, TradeSide.BUY, 10, "-1000",
                       trade_id="B1", executed_at=datetime(2026, 1, 1)),
             _db_trade(account, instrument, TradeSide.SELL, 10, "1200",
                       trade_id="S1", executed_at=datetime(2026, 1, 2)),
+            _db_trade(account, other, TradeSide.BUY, 5, "-500",
+                      trade_id="B2", executed_at=datetime(2026, 1, 3)),
+            _db_trade(account, other, TradeSide.SELL, 5, "650",
+                      trade_id="S2", executed_at=datetime(2026, 1, 4)),
         ]
     )
     db_session.commit()
 
-    assert compute_realized_pnl(db_session, account) == Decimal("200")
+    # instrument: 1200-1000 = 200 ; other: 650-500 = 150 ; total = 350
+    assert compute_realized_pnl(db_session, account) == Decimal("350")
 
 
 def test_compute_positions_returns_open_holdings(db_session, account, instrument):
@@ -68,3 +80,16 @@ def test_compute_positions_omits_fully_closed(db_session, account, instrument):
     db_session.commit()
 
     assert compute_positions(db_session, account) == []
+
+
+def test_compute_positions_raises_on_dangling_instrument(db_session, account, instrument):
+    # A trade pointing at an instrument_id that does not exist (SQLite does
+    # not enforce the FK) must fail loudly, not raise a cryptic AttributeError.
+    trade = _db_trade(account, instrument, TradeSide.BUY, 10, "-1000",
+                      trade_id="B1", executed_at=datetime(2026, 1, 1))
+    trade.instrument_id = 999999  # no such instrument
+    db_session.add(trade)
+    db_session.commit()
+
+    with pytest.raises(LookupError, match="999999"):
+        compute_positions(db_session, account)

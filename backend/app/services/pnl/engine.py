@@ -60,6 +60,10 @@ def compute_positions(session: Session, account: Account) -> list[Position]:
         if result.open_quantity == 0:
             continue
         instrument = session.get(Instrument, instrument_id)
+        if instrument is None:
+            raise LookupError(
+                f"instrument {instrument_id} not found — DB projection may be corrupt"
+            )
         positions.append(
             Position(
                 instrument_id=instrument_id,
