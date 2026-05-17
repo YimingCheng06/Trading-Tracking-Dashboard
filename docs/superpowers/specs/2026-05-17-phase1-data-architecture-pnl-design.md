@@ -66,10 +66,10 @@ backend/data/
 
 | 列 | 取值 | 含义 |
 |---|---|---|
-| `source` | `parsed` / `manual` | 程序导入 / 用户手改或新增 |
+| `source` | `PARSED` / `MANUAL` | 程序导入 / 用户手改或新增 |
 | `import_batch` | 批次 id 或 `manual` | 如 `2026-05-17T1430-dailyactivity`;手加行写 `manual` |
 
-`source` 主要用于溯源展示;「重导入不覆盖手改」靠去重键保证(见 3.4),不依赖此列。
+`source` 主要用于溯源展示;「重导入不覆盖手改」靠去重键保证(见 3.4),不依赖此列。CSV 里所有枚举列(`source`、`side`、`asset_class`、`flow_type` 等)一律用大写枚举值,与 `RecordSource` 等枚举定义一致。
 
 ### 3.3 各文件字段
 
