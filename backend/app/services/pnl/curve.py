@@ -6,8 +6,8 @@ positions_snapshot (the market-data layer); this module only does the math.
 - Mode A (IBKR / time-weighted return): deposits do not distort past
   percentages; daily returns are chained.
 - Mode B (capital-adjusted): every day's percentage is cumulative P&L
-  divided by the *current* total net deposits, so the whole curve
-  rescales when money is added.
+  divided by the **final (latest-day) total net deposits**, so the whole
+  curve rescales when money is added.
 """
 
 from dataclasses import dataclass

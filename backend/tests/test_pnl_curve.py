@@ -49,9 +49,14 @@ def test_mode_b_worked_example():
     ]
     curve = compute_equity_curve(points, "B")
 
+    assert curve[0].pct == Decimal("0")  # day 1: 0 P&L / 10000
     assert curve[1].pct == Decimal("-0.01")
     assert curve[2].pct == Decimal("-0.01")
     assert curve[3].pct == Decimal("-0.0199")
+
+
+def test_mode_b_empty_returns_empty():
+    assert compute_equity_curve([], "B") == []
 
 
 def test_mode_b_pct_is_none_when_net_deposits_not_positive():
