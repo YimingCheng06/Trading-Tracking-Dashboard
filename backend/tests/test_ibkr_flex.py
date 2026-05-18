@@ -6,6 +6,7 @@ from pathlib import Path
 from app.db.enums import AssetClass, CashFlowType, CorporateActionType, OptionType, TradeSide
 from app.services.fx.provider import StatementFxProvider
 from app.services.parsers.ibkr_flex import (
+    ParsedStatement,
     _content_hash,
     _dec,
     _parse_cash,
@@ -13,6 +14,7 @@ from app.services.parsers.ibkr_flex import (
     _parse_dt,
     _parse_trades,
     _split_sections,
+    parse_flex_csv,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ibkr_flex_sample.csv"
@@ -221,3 +223,42 @@ def test_parse_corp_rejects_unrecognised_group():
         raise AssertionError("expected ValueError")
     except ValueError as e:
         assert "corporate action" in str(e)
+
+
+# ---------------------------------------------------------------------------
+# Task 6: parse_flex_csv / ParsedStatement
+# ---------------------------------------------------------------------------
+
+
+def test_parse_flex_csv_assembles_everything():
+    parsed = parse_flex_csv(FIXTURE)
+    assert isinstance(parsed, ParsedStatement)
+    assert parsed.account_id == "U0000000"
+    assert len(parsed.instruments) == 2          # AAPL stock + AAPL option
+    assert len(parsed.trades) == 4               # 2 stock + 2 option (no CASH)
+    assert len(parsed.cash_flows) == 6
+    assert len(parsed.corporate_actions) == 1
+
+
+def test_parse_flex_csv_uses_harvested_forex_rates_offline():
+    # No fx_provider passed: forex rows in the fixture cover every CAD
+    # cash-flow date, so this resolves with no network call.
+    parsed = parse_flex_csv(FIXTURE)
+    deposit = next(
+        f for f in parsed.cash_flows if f.amount_orig == Decimal("5000")
+    )
+    assert deposit.fx_rate_to_usd == Decimal("1") / Decimal("1.4")
+
+
+def test_parse_flex_csv_accepts_injected_provider():
+    provider = StatementFxProvider(
+        {
+            ("CAD", date(2026, 1, 1)): Decimal("0.5"),
+            ("CAD", date(2026, 3, 1)): Decimal("0.5"),
+        }
+    )
+    parsed = parse_flex_csv(FIXTURE, fx_provider=provider)
+    deposit = next(
+        f for f in parsed.cash_flows if f.amount_orig == Decimal("5000")
+    )
+    assert deposit.fx_rate_to_usd == Decimal("0.5")

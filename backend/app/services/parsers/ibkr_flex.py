@@ -8,11 +8,15 @@ to an `AccountLedger`, deduplicated so re-importing a statement is a no-op.
 No DB access — the M3 projection builder rebuilds the DB from the ledger.
 """
 
+import csv
 import hashlib
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 from app.db.enums import AssetClass, CashFlowType, CorporateActionType, OptionType, TradeSide
+from app.services.fx.factory import build_fx_provider
 from app.services.fx.provider import FxRateProvider
 from app.services.ledger.rows import (
     LedgerCashFlow,
@@ -242,3 +246,52 @@ def _parse_corp(rows: list[dict[str, str]]) -> list[LedgerCorporateAction]:
             )
         )
     return actions
+
+
+@dataclass(frozen=True)
+class ParsedStatement:
+    account_id: str
+    instruments: list[LedgerInstrument]
+    trades: list[LedgerTrade]
+    cash_flows: list[LedgerCashFlow]
+    corporate_actions: list[LedgerCorporateAction]
+
+
+def parse_flex_csv(
+    path: Path, *, fx_provider: FxRateProvider | None = None
+) -> ParsedStatement:
+    """Parse an IBKR Flex Query CSV into a ParsedStatement.
+
+    `fx_provider` overrides FX resolution (used by tests to stay offline).
+    When omitted, the provider chains the statement's own forex rates
+    first, then ECB rates — see `build_fx_provider`.
+    """
+    with path.open(newline="") as f:
+        rows = list(csv.reader(f))
+    if not rows:
+        raise ValueError(f"{path} is empty")
+    account_id = rows[1][0] if len(rows) > 1 else ""
+
+    trades_rows: list[dict[str, str]] = []
+    cash_rows: list[dict[str, str]] = []
+    corp_rows: list[dict[str, str]] = []
+    for header, data in _split_sections(rows):
+        dicts = [dict(zip(header, r, strict=False)) for r in data]
+        if "Buy/Sell" in header:
+            trades_rows = dicts
+        elif "Type" in header:
+            cash_rows = dicts
+        else:
+            corp_rows = dicts
+
+    instruments, trades, statement_rates = _parse_trades(trades_rows)
+    provider = fx_provider or build_fx_provider(statement_rates)
+    cash_flows = _parse_cash(cash_rows, provider)
+    corporate_actions = _parse_corp(corp_rows)
+    return ParsedStatement(
+        account_id=account_id,
+        instruments=instruments,
+        trades=trades,
+        cash_flows=cash_flows,
+        corporate_actions=corporate_actions,
+    )
