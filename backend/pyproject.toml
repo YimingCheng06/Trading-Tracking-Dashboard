@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "python-multipart>=0.0.20",
     "httpx>=0.28.0",
+    "yfinance>=0.2.40",
 ]
 
 [dependency-groups]
