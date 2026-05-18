@@ -1,17 +1,93 @@
-import { PlaceholderPage } from "../_components/PlaceholderPage";
+import { api, type Account, type Position } from "@/lib/api";
+import { fmtMoney, fmtNum, pnlClass } from "@/lib/format";
 import { IconBriefcase } from "../_components/icons";
+import { PageShell } from "../_components/PageShell";
+import { DataTable, type Column } from "../_components/DataTable";
+import { EmptyState } from "../_components/EmptyState";
+import { RefreshPricesButton } from "../_components/RefreshPricesButton";
 
-export default function PositionsPage() {
+export const dynamic = "force-dynamic";
+
+const COLUMNS: Column[] = [
+  { key: "symbol", label: "Symbol" },
+  { key: "qty", label: "Qty", numeric: true },
+  { key: "avg", label: "Avg Cost", numeric: true },
+  { key: "cost", label: "Cost Basis", numeric: true },
+  { key: "price", label: "Mkt Price", numeric: true },
+  { key: "value", label: "Mkt Value", numeric: true },
+  { key: "upnl", label: "Unrealized P&L", numeric: true },
+];
+
+export default async function PositionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ account?: string }>;
+}) {
+  const { account } = await searchParams;
+
+  let accounts: Account[] = [];
+  let offline = false;
+  try {
+    accounts = await api.accounts();
+  } catch {
+    offline = true;
+  }
+  const accountId = account ?? accounts[0]?.broker_account_id;
+
+  let positions: Position[] = [];
+  if (accountId && !offline) {
+    try {
+      positions = await api.positions(accountId);
+    } catch {
+      offline = true;
+    }
+  }
+
   return (
-    <PlaceholderPage
+    <PageShell
       group="Portfolio"
       title="Positions"
-      subtitle="Open positions across stocks, ETFs, and options — underlying, strike, expiry, greeks once the IBKR adapter lands."
+      subtitle="按 FIFO 重放得到的当前持仓;市值与未实现盈亏来自最近一次行情快照。"
       icon={IconBriefcase}
-      notes={[
-        "Source priority: IBKRRealtime → IBKRClientPortal → IBKRFlexQuery → StatementFile",
-        "FX column reflects base-currency conversion per locked P&L design",
-      ]}
-    />
+      action={accountId ? <RefreshPricesButton accountId={accountId} /> : null}
+    >
+      {offline ? (
+        <EmptyState
+          tone="warn"
+          title="后端离线"
+          hint="无法连接 API。确认 backend 已在 :8000 运行。"
+        />
+      ) : !accountId ? (
+        <EmptyState
+          title="还没有账户"
+          hint="先到 Upload 页导入一份 IBKR Flex 对账单。"
+        />
+      ) : positions.length === 0 ? (
+        <EmptyState
+          title="该账户暂无持仓"
+          hint="导入对账单后,持仓会在这里出现。"
+        />
+      ) : (
+        <DataTable
+          columns={COLUMNS}
+          rows={positions.map((p) => ({
+            id: p.symbol,
+            cells: [
+              <span key="s" className="font-medium text-foreground">
+                {p.symbol}
+              </span>,
+              fmtNum(p.quantity),
+              fmtMoney(p.average_cost),
+              fmtMoney(p.cost_basis),
+              fmtMoney(p.market_price),
+              fmtMoney(p.market_value),
+              <span key="u" className={pnlClass(p.unrealized_pnl)}>
+                {fmtMoney(p.unrealized_pnl)}
+              </span>,
+            ],
+          }))}
+        />
+      )}
+    </PageShell>
   );
 }
