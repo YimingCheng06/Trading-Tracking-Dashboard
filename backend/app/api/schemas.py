@@ -1,5 +1,8 @@
 """Pydantic response models for the HTTP API."""
 
+from datetime import datetime
+from decimal import Decimal
+
 from pydantic import BaseModel
 
 
@@ -25,3 +28,31 @@ class AccountImportOut(BaseModel):
 
 class UploadReportOut(BaseModel):
     accounts: list[AccountImportOut]
+
+
+class PositionOut(BaseModel):
+    symbol: str
+    quantity: Decimal
+    cost_basis: Decimal
+    average_cost: Decimal
+    market_price: Decimal | None
+    market_value: Decimal | None
+    unrealized_pnl: Decimal | None
+
+
+class TradeOut(BaseModel):
+    trade_id: str
+    symbol: str
+    side: str
+    quantity: Decimal
+    price: Decimal
+    proceeds_usd: Decimal
+    commission_usd: Decimal
+    realized_pnl_ibkr: Decimal | None
+    executed_at: datetime
+
+
+class PnlOut(BaseModel):
+    realized_pnl: Decimal
+    open_position_count: int
+    base_currency: str
