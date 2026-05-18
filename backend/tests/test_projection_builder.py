@@ -255,14 +255,20 @@ def test_project_corporate_actions_idempotent(db_session, tmp_path):
     )
 
 
-def test_project_corporate_actions_unknown_instrument_raises(db_session, tmp_path):
+def test_project_corporate_actions_unknown_instrument_creates_stub(db_session, tmp_path):
+    # Corporate actions (e.g. symbol changes) can reference symbols not yet
+    # traded in this account.  The builder auto-creates a stub instrument so
+    # the action can still be recorded without raising.
     ledger = _ledger(tmp_path)
     ledger.corporate_actions.append([_lca(instrument="GHOST")])
 
     instruments = builder.project_instruments(db_session, ledger)  # empty
+    builder.project_corporate_actions(db_session, ledger, instruments)
 
-    with pytest.raises(ValueError, match="GHOST"):
-        builder.project_corporate_actions(db_session, ledger, instruments)
+    ca = db_session.scalars(select(CorporateAction)).one()
+    stub = db_session.scalars(select(Instrument)).one()
+    assert stub.symbol == "GHOST"
+    assert ca.instrument_id == stub.id
 
 
 # --- rebuild_account ------------------------------------------------------

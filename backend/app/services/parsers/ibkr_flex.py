@@ -308,6 +308,12 @@ def parse_flex_csv(
         if acct and acct not in account_ids:
             account_ids.append(acct)
 
+    if not account_ids:
+        raise ValueError(
+            f"{path} contains no recognisable IBKR Flex sections "
+            f"(expected rows with 'ClientAccountID' header)"
+        )
+
     statements: list[ParsedStatement] = []
     for acct in account_ids:
         a_trades = [r for r in trades_rows if r.get("ClientAccountID") == acct]
