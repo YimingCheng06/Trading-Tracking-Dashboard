@@ -1,11 +1,13 @@
 """Parse an IBKR Flex Query CSV into ledger row models.
 
-A Flex export stacks three sections in one file — Trades, Corporate
-Actions, Cash Transactions — each opening with its own header row whose
-first cell is "ClientAccountID". `parse_flex_csv` splits the sections and
-maps each to the M2 `Ledger*` row models; `import_statement` appends them
-to an `AccountLedger`, deduplicated so re-importing a statement is a no-op.
-No DB access — the M3 projection builder rebuilds the DB from the ledger.
+A Flex export stacks Trades, Corporate Actions and Cash Transactions
+sections in one file — each opening with its own header row whose first
+cell is "ClientAccountID" — and may repeat them for several accounts.
+`parse_flex_csv` splits the sections, groups rows by account, and maps
+each account to the M2 `Ledger*` row models; `import_statement` appends
+each account's rows to its own `AccountLedger`, deduplicated so
+re-importing a statement is a no-op. No DB access — the M3 projection
+builder rebuilds the DB from the ledger.
 """
 
 import csv
@@ -20,6 +22,7 @@ from app.services.fx.factory import build_fx_provider
 from app.services.fx.provider import FxRateProvider
 from app.services.ledger.account_ledger import AccountLedger
 from app.services.ledger.rows import (
+    LedgerAccount,
     LedgerCashFlow,
     LedgerCorporateAction,
     LedgerInstrument,
@@ -208,7 +211,8 @@ def _parse_cash(
                 amount_orig=amount,
                 amount_usd=amount * rate,
                 description=type_label,
-                external_id=_content_hash(
+                external_id=row.get("TransactionID")
+                or _content_hash(
                     type_label, row["Date/Time"], row["Amount"], row["Symbol"]
                 ),
                 occurred_at=occurred_at,
@@ -248,9 +252,9 @@ def _parse_corp(rows: list[dict[str, str]]) -> list[LedgerCorporateAction]:
                     f"{old_row['Symbol']} → {new_row['Symbol']} "
                     f"({old_qty}:{new_qty})"
                 ),
-                external_id=_content_hash(
-                    old_row["Symbol"], new_row["Symbol"], when
-                ),
+                external_id=old_row.get("ActionID")
+                or new_row.get("ActionID")
+                or _content_hash(old_row["Symbol"], new_row["Symbol"], when),
             )
         )
     return actions
@@ -267,8 +271,14 @@ class ParsedStatement:
 
 def parse_flex_csv(
     path: Path, *, fx_provider: FxRateProvider | None = None
-) -> ParsedStatement:
-    """Parse an IBKR Flex Query CSV into a ParsedStatement.
+) -> list[ParsedStatement]:
+    """Parse an IBKR Flex Query CSV into one ParsedStatement per account.
+
+    A Flex export may stack several accounts, each with its own Trades /
+    Corporate Actions / Cash Transactions sections, and a section type may
+    appear more than once. Rows are accumulated across all sections and
+    grouped by their `ClientAccountID`; statements come back in the order
+    accounts are first seen.
 
     `fx_provider` overrides FX resolution (used by tests to stay offline).
     When omitted, the provider chains the statement's own forex rates
@@ -285,28 +295,38 @@ def parse_flex_csv(
     for header, data in _split_sections(rows):
         dicts = [dict(zip(header, r, strict=False)) for r in data]
         if "Buy/Sell" in header:
-            trades_rows = dicts
+            trades_rows.extend(dicts)
         elif "Type" in header:
-            cash_rows = dicts
+            cash_rows.extend(dicts)
         else:
-            corp_rows = dicts
+            corp_rows.extend(dicts)
 
-    # Account id comes from any section's first data row (column
-    # "ClientAccountID") — robust against blank lines between sections.
-    first_data = trades_rows or corp_rows or cash_rows
-    account_id = first_data[0].get("ClientAccountID", "") if first_data else ""
+    # Account ids in first-seen order across every section.
+    account_ids: list[str] = []
+    for row in (*trades_rows, *cash_rows, *corp_rows):
+        acct = row.get("ClientAccountID", "")
+        if acct and acct not in account_ids:
+            account_ids.append(acct)
 
-    instruments, trades, statement_rates = _parse_trades(trades_rows)
-    provider = fx_provider or build_fx_provider(statement_rates)
-    cash_flows = _parse_cash(cash_rows, provider)
-    corporate_actions = _parse_corp(corp_rows)
-    return ParsedStatement(
-        account_id=account_id,
-        instruments=instruments,
-        trades=trades,
-        cash_flows=cash_flows,
-        corporate_actions=corporate_actions,
-    )
+    statements: list[ParsedStatement] = []
+    for acct in account_ids:
+        a_trades = [r for r in trades_rows if r.get("ClientAccountID") == acct]
+        a_cash = [r for r in cash_rows if r.get("ClientAccountID") == acct]
+        a_corp = [r for r in corp_rows if r.get("ClientAccountID") == acct]
+        instruments, trades, statement_rates = _parse_trades(a_trades)
+        provider = fx_provider or build_fx_provider(statement_rates)
+        cash_flows = _parse_cash(a_cash, provider)
+        corporate_actions = _parse_corp(a_corp)
+        statements.append(
+            ParsedStatement(
+                account_id=acct,
+                instruments=instruments,
+                trades=trades,
+                cash_flows=cash_flows,
+                corporate_actions=corporate_actions,
+            )
+        )
+    return statements
 
 
 @dataclass(frozen=True)
@@ -319,20 +339,41 @@ class ImportReport:
 
 def import_statement(
     path: Path,
-    ledger: AccountLedger,
+    accounts_dir: Path,
     *,
     fx_provider: FxRateProvider | None = None,
-) -> ImportReport:
-    """Parse a Flex CSV and append every row to `ledger`.
+) -> dict[str, ImportReport]:
+    """Parse a Flex CSV and append each account's rows to its own ledger.
+
+    For every account in the file the ledger at `accounts_dir/<account_id>`
+    is reused if it exists, else created — account.toml is seeded with the
+    account id as the name and USD as the base currency, both of which the
+    user can edit afterwards (the ledger files are the source of truth).
 
     Each `LedgerTable.append` deduplicates on the row's `dedup_key`, so
     re-importing the same statement adds nothing and never overwrites a
-    row the user edited by hand.
+    row the user edited by hand. Returns an ImportReport per account id.
     """
-    parsed = parse_flex_csv(path, fx_provider=fx_provider)
-    return ImportReport(
-        instruments=ledger.instruments.append(parsed.instruments),
-        trades=ledger.trades.append(parsed.trades),
-        cash_flows=ledger.cash_flows.append(parsed.cash_flows),
-        corporate_actions=ledger.corporate_actions.append(parsed.corporate_actions),
-    )
+    reports: dict[str, ImportReport] = {}
+    for stmt in parse_flex_csv(path, fx_provider=fx_provider):
+        root = accounts_dir / stmt.account_id
+        if (root / "account.toml").exists():
+            ledger = AccountLedger(root)
+        else:
+            ledger = AccountLedger.create(
+                accounts_dir,
+                LedgerAccount(
+                    broker_account_id=stmt.account_id,
+                    name=stmt.account_id,
+                    base_currency="USD",
+                ),
+            )
+        reports[stmt.account_id] = ImportReport(
+            instruments=ledger.instruments.append(stmt.instruments),
+            trades=ledger.trades.append(stmt.trades),
+            cash_flows=ledger.cash_flows.append(stmt.cash_flows),
+            corporate_actions=ledger.corporate_actions.append(
+                stmt.corporate_actions
+            ),
+        )
+    return reports

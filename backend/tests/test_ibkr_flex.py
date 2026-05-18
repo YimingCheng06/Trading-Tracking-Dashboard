@@ -6,7 +6,6 @@ from pathlib import Path
 from app.db.enums import AssetClass, CashFlowType, CorporateActionType, OptionType, TradeSide
 from app.services.fx.provider import StatementFxProvider
 from app.services.ledger.account_ledger import AccountLedger
-from app.services.ledger.rows import LedgerAccount
 from app.services.parsers.ibkr_flex import (
     ImportReport,
     ParsedStatement,
@@ -22,6 +21,7 @@ from app.services.parsers.ibkr_flex import (
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ibkr_flex_sample.csv"
+MULTI = Path(__file__).parent / "fixtures" / "ibkr_flex_multi_account.csv"
 
 
 def test_split_sections_finds_three_sections():
@@ -254,7 +254,9 @@ def test_parse_corp_rejects_unrecognised_group():
 
 
 def test_parse_flex_csv_assembles_everything():
-    parsed = parse_flex_csv(FIXTURE)
+    statements = parse_flex_csv(FIXTURE)
+    assert len(statements) == 1
+    parsed = statements[0]
     assert isinstance(parsed, ParsedStatement)
     assert parsed.account_id == "U0000000"
     assert len(parsed.instruments) == 2          # AAPL stock + AAPL option
@@ -266,7 +268,7 @@ def test_parse_flex_csv_assembles_everything():
 def test_parse_flex_csv_uses_harvested_forex_rates_offline():
     # No fx_provider passed: forex rows in the fixture cover every CAD
     # cash-flow date, so this resolves with no network call.
-    parsed = parse_flex_csv(FIXTURE)
+    parsed = parse_flex_csv(FIXTURE)[0]
     deposit = next(
         f for f in parsed.cash_flows if f.amount_orig == Decimal("5000")
     )
@@ -280,11 +282,42 @@ def test_parse_flex_csv_accepts_injected_provider():
             ("CAD", date(2026, 3, 1)): Decimal("0.5"),
         }
     )
-    parsed = parse_flex_csv(FIXTURE, fx_provider=provider)
+    parsed = parse_flex_csv(FIXTURE, fx_provider=provider)[0]
     deposit = next(
         f for f in parsed.cash_flows if f.amount_orig == Decimal("5000")
     )
     assert deposit.fx_rate_to_usd == Decimal("0.5")
+
+
+def test_parse_flex_csv_splits_multiple_accounts():
+    statements = parse_flex_csv(MULTI)
+    assert [s.account_id for s in statements] == ["U0000001", "U0000002"]
+
+
+def test_parse_flex_csv_accumulates_repeated_sections():
+    # U0000001's trades come from two separate Trades sections — both
+    # must survive (rows accumulate, the later section does not overwrite).
+    s1 = parse_flex_csv(MULTI)[0]
+    assert {t.trade_id for t in s1.trades} == {"EXEC-A1", "EXEC-A2"}
+
+
+def test_parse_flex_csv_per_account_contents():
+    s1, s2 = parse_flex_csv(MULTI)
+    assert len(s1.trades) == 2
+    assert len(s1.cash_flows) == 1
+    assert len(s1.corporate_actions) == 1
+    assert len(s2.trades) == 1
+    assert s2.corporate_actions == []
+
+
+def test_parse_cash_uses_transaction_id_as_external_id():
+    s1 = parse_flex_csv(MULTI)[0]
+    assert s1.cash_flows[0].external_id == "TXN-D1"
+
+
+def test_parse_corp_uses_action_id_as_external_id():
+    s1 = parse_flex_csv(MULTI)[0]
+    assert s1.corporate_actions[0].external_id == "ACT-1"
 
 
 # ---------------------------------------------------------------------------
@@ -293,31 +326,33 @@ def test_parse_flex_csv_accepts_injected_provider():
 
 
 def test_import_statement_appends_all_tables(tmp_path):
-    ledger = AccountLedger.create(
-        tmp_path,
-        LedgerAccount(
-            broker_account_id="U0000000", name="Test", base_currency="USD"
-        ),
-    )
-    report = import_statement(FIXTURE, ledger, fx_provider=_FX)
+    reports = import_statement(FIXTURE, tmp_path, fx_provider=_FX)
+    assert set(reports) == {"U0000000"}
+    report = reports["U0000000"]
     assert isinstance(report, ImportReport)
     assert report.trades.added == 4
     assert report.instruments.added == 2
     assert report.cash_flows.added == 6
     assert report.corporate_actions.added == 1
-    assert len(ledger.trades.read()) == 4
+    assert len(AccountLedger(tmp_path / "U0000000").trades.read()) == 4
 
 
 def test_import_statement_is_idempotent(tmp_path):
-    ledger = AccountLedger.create(
-        tmp_path,
-        LedgerAccount(
-            broker_account_id="U0000000", name="Test", base_currency="USD"
-        ),
-    )
-    import_statement(FIXTURE, ledger, fx_provider=_FX)
-    report = import_statement(FIXTURE, ledger, fx_provider=_FX)
-    assert report.trades.added == 0
-    assert report.cash_flows.added == 0
-    assert report.corporate_actions.added == 0
-    assert len(ledger.trades.read()) == 4
+    import_statement(FIXTURE, tmp_path, fx_provider=_FX)
+    reports = import_statement(FIXTURE, tmp_path, fx_provider=_FX)
+    assert reports["U0000000"].trades.added == 0
+    assert reports["U0000000"].cash_flows.added == 0
+    assert reports["U0000000"].corporate_actions.added == 0
+    assert len(AccountLedger(tmp_path / "U0000000").trades.read()) == 4
+
+
+def test_import_statement_routes_each_account_to_its_own_ledger(tmp_path):
+    reports = import_statement(MULTI, tmp_path)
+    assert set(reports) == {"U0000001", "U0000002"}
+    assert reports["U0000001"].trades.added == 2
+    assert reports["U0000002"].trades.added == 1
+    # Each account got its own ledger directory, auto-created with account.toml.
+    assert (tmp_path / "U0000001" / "account.toml").exists()
+    assert (tmp_path / "U0000002" / "account.toml").exists()
+    assert len(AccountLedger(tmp_path / "U0000001").trades.read()) == 2
+    assert len(AccountLedger(tmp_path / "U0000002").trades.read()) == 1
