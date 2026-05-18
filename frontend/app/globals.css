@@ -68,6 +68,19 @@ body {
 }
 
 /*
+ * Hide scrollbars while keeping the element scrollable. Used on the rails:
+ * `overflow-y: auto` forces the cross axis to `auto` too, so the hover
+ * tooltips that extend past the rail would otherwise raise a stray
+ * horizontal scrollbar. Discord-style rails hide their scrollbars anyway.
+ */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome / Safari */
+}
+
+/*
  * Ambient glow used behind the dashboard hero — a soft radial wash in the
  * TradingView accent. Low opacity, fixed position, behind content.
  */

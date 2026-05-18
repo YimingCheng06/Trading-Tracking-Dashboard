@@ -42,7 +42,7 @@ export function ModuleRail({
       <SearchButton />
       <GroupDivider />
 
-      <div className="flex flex-1 flex-col gap-1 overflow-y-auto">
+      <div className="no-scrollbar flex flex-1 flex-col gap-1 overflow-y-auto">
         {moduleGroups.map((group, gi) => (
           <div key={group.id} className="flex flex-col items-center gap-1">
             {gi > 0 && <GroupDivider />}
