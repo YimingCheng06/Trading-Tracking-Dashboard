@@ -209,3 +209,15 @@ def test_parse_corp_pairs_symbol_change():
     assert action.ex_date == date(2026, 2, 1)
     assert action.ratio == Decimal("1")
     assert "OLDX.OLD" in action.description and "NEWX" in action.description
+
+
+def test_parse_corp_rejects_unrecognised_group():
+    rows = _corp_section()
+    # Duplicate the .OLD row → a 2-.OLD / 1-new group, which is not a
+    # recognised symbol-change pair.
+    rows.append(dict(next(r for r in rows if r["Symbol"].endswith(".OLD"))))
+    try:
+        _parse_corp(rows)
+        raise AssertionError("expected ValueError")
+    except ValueError as e:
+        assert "corporate action" in str(e)
