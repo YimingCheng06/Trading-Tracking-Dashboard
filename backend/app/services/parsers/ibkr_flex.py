@@ -270,7 +270,6 @@ def parse_flex_csv(
         rows = list(csv.reader(f))
     if not rows:
         raise ValueError(f"{path} is empty")
-    account_id = rows[1][0] if len(rows) > 1 else ""
 
     trades_rows: list[dict[str, str]] = []
     cash_rows: list[dict[str, str]] = []
@@ -283,6 +282,11 @@ def parse_flex_csv(
             cash_rows = dicts
         else:
             corp_rows = dicts
+
+    # Account id comes from any section's first data row (column
+    # "ClientAccountID") — robust against blank lines between sections.
+    first_data = trades_rows or corp_rows or cash_rows
+    account_id = first_data[0].get("ClientAccountID", "") if first_data else ""
 
     instruments, trades, statement_rates = _parse_trades(trades_rows)
     provider = fx_provider or build_fx_provider(statement_rates)
