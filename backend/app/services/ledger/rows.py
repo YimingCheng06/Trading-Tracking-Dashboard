@@ -102,6 +102,8 @@ class LedgerCorporateAction(BaseModel):
 
     @property
     def dedup_key(self) -> tuple:
+        if self.external_id not in (None, ""):
+            return (self.external_id,)
         return (self.instrument, self.action_type, self.ex_date)
 
 
