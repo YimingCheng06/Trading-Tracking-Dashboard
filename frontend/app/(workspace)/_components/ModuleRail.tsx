@@ -2,25 +2,43 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { moduleGroups, accounts } from "../_config/workspace";
+import { moduleGroups } from "../_config/workspace";
+import { accountTint, accountShort } from "@/lib/accounts";
+import type { Account } from "@/lib/api";
 import { IconSearch } from "./icons";
 
 /**
- * Second column: the account-specific icon menu. Renders only when an
- * account is selected. Items are icon-only with hover tooltips — text
- * appears on pointer enter, matching the "只有鼠标放上去才出现文字" rule.
+ * 第二栏:账户级图标菜单。账户徽标取自真实账户;导航链接保留当前
+ * `?account=` query,激活态只比对 pathname(不含 query)。
  */
-export function ModuleRail({ activeAccountId }: { activeAccountId: string }) {
+export function ModuleRail({
+  activeAccountId,
+  accounts,
+}: {
+  activeAccountId: string;
+  accounts: Account[];
+}) {
   const pathname = usePathname();
-  const account = accounts.find((a) => a.id === activeAccountId) ?? accounts[0];
+  const idx = accounts.findIndex(
+    (a) => a.broker_account_id === activeAccountId,
+  );
+  const account = idx >= 0 ? accounts[idx] : null;
 
   return (
     <nav
       className="relative flex h-full flex-col items-center gap-2 border-r border-border/70 bg-rail py-4"
       style={{ width: "var(--module-width)" }}
     >
-      <AccountBadge tint={account.tint} short={account.short} label={account.label} />
-      <GroupDivider />
+      {account && (
+        <>
+          <AccountBadge
+            tint={accountTint(idx)}
+            short={accountShort(account)}
+            label={account.name}
+          />
+          <GroupDivider />
+        </>
+      )}
       <SearchButton />
       <GroupDivider />
 
@@ -31,11 +49,19 @@ export function ModuleRail({ activeAccountId }: { activeAccountId: string }) {
             {group.items.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href;
+              const href = activeAccountId
+                ? `${item.href}?account=${encodeURIComponent(activeAccountId)}`
+                : item.href;
               return (
-                <div key={item.id} className="rail-group rail-item relative" data-active={active} data-hover>
+                <div
+                  key={item.id}
+                  className="rail-group rail-item relative"
+                  data-active={active}
+                  data-hover
+                >
                   <span className="rail-indicator" />
                   <Link
-                    href={item.href}
+                    href={href}
                     className="flex items-center justify-center transition-all duration-150"
                     style={{
                       width: "var(--icon-size)",
