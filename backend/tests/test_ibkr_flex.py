@@ -5,7 +5,10 @@ from pathlib import Path
 
 from app.db.enums import AssetClass, CashFlowType, CorporateActionType, OptionType, TradeSide
 from app.services.fx.provider import StatementFxProvider
+from app.services.ledger.account_ledger import AccountLedger
+from app.services.ledger.rows import LedgerAccount
 from app.services.parsers.ibkr_flex import (
+    ImportReport,
     ParsedStatement,
     _content_hash,
     _dec,
@@ -14,6 +17,7 @@ from app.services.parsers.ibkr_flex import (
     _parse_dt,
     _parse_trades,
     _split_sections,
+    import_statement,
     parse_flex_csv,
 )
 
@@ -262,3 +266,39 @@ def test_parse_flex_csv_accepts_injected_provider():
         f for f in parsed.cash_flows if f.amount_orig == Decimal("5000")
     )
     assert deposit.fx_rate_to_usd == Decimal("0.5")
+
+
+# ---------------------------------------------------------------------------
+# Task 7: import_statement / ImportReport
+# ---------------------------------------------------------------------------
+
+
+def test_import_statement_appends_all_tables(tmp_path):
+    ledger = AccountLedger.create(
+        tmp_path,
+        LedgerAccount(
+            broker_account_id="U0000000", name="Test", base_currency="USD"
+        ),
+    )
+    report = import_statement(FIXTURE, ledger, fx_provider=_FX)
+    assert isinstance(report, ImportReport)
+    assert report.trades.added == 4
+    assert report.instruments.added == 2
+    assert report.cash_flows.added == 6
+    assert report.corporate_actions.added == 1
+    assert len(ledger.trades.read()) == 4
+
+
+def test_import_statement_is_idempotent(tmp_path):
+    ledger = AccountLedger.create(
+        tmp_path,
+        LedgerAccount(
+            broker_account_id="U0000000", name="Test", base_currency="USD"
+        ),
+    )
+    import_statement(FIXTURE, ledger, fx_provider=_FX)
+    report = import_statement(FIXTURE, ledger, fx_provider=_FX)
+    assert report.trades.added == 0
+    assert report.cash_flows.added == 0
+    assert report.corporate_actions.added == 0
+    assert len(ledger.trades.read()) == 4

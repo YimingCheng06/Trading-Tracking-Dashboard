@@ -18,12 +18,14 @@ from pathlib import Path
 from app.db.enums import AssetClass, CashFlowType, CorporateActionType, OptionType, TradeSide
 from app.services.fx.factory import build_fx_provider
 from app.services.fx.provider import FxRateProvider
+from app.services.ledger.account_ledger import AccountLedger
 from app.services.ledger.rows import (
     LedgerCashFlow,
     LedgerCorporateAction,
     LedgerInstrument,
     LedgerTrade,
 )
+from app.services.ledger.table import AppendReport
 
 _ASSET_CLASS = {"STK": AssetClass.STOCK, "OPT": AssetClass.OPTION}
 _OPTION_TYPE = {"P": OptionType.PUT, "C": OptionType.CALL}
@@ -298,4 +300,33 @@ def parse_flex_csv(
         trades=trades,
         cash_flows=cash_flows,
         corporate_actions=corporate_actions,
+    )
+
+
+@dataclass(frozen=True)
+class ImportReport:
+    instruments: AppendReport
+    trades: AppendReport
+    cash_flows: AppendReport
+    corporate_actions: AppendReport
+
+
+def import_statement(
+    path: Path,
+    ledger: AccountLedger,
+    *,
+    fx_provider: FxRateProvider | None = None,
+) -> ImportReport:
+    """Parse a Flex CSV and append every row to `ledger`.
+
+    Each `LedgerTable.append` deduplicates on the row's `dedup_key`, so
+    re-importing the same statement adds nothing and never overwrites a
+    row the user edited by hand.
+    """
+    parsed = parse_flex_csv(path, fx_provider=fx_provider)
+    return ImportReport(
+        instruments=ledger.instruments.append(parsed.instruments),
+        trades=ledger.trades.append(parsed.trades),
+        cash_flows=ledger.cash_flows.append(parsed.cash_flows),
+        corporate_actions=ledger.corporate_actions.append(parsed.corporate_actions),
     )
