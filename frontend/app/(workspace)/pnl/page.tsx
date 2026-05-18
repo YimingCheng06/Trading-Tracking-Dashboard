@@ -5,7 +5,7 @@ import {
   type CurvePoint,
   type Pnl,
 } from "@/lib/api";
-import { fmtMoney, pnlClass } from "@/lib/format";
+import { fmtMoney, fmtPct, pnlClass } from "@/lib/format";
 import { IconTrendingUp } from "../_components/icons";
 import { PageShell } from "../_components/PageShell";
 import { EmptyState } from "../_components/EmptyState";
@@ -13,6 +13,11 @@ import { EquityCurve } from "../_components/EquityCurve";
 import { CurveModeToggle } from "../_components/CurveModeToggle";
 
 export const dynamic = "force-dynamic";
+
+const MODE_CAPTION: Record<CurveMode, string> = {
+  A: "口径 Mode A · TWR —— 过去净值点冻结,入金不重算历史。",
+  B: "口径 Mode B · 净入金 —— 累计盈亏 ÷ 当前累计净入金,入金重算整条曲线。",
+};
 
 function Metric({
   label,
@@ -110,16 +115,28 @@ export default async function PnlPage({
           </section>
 
           <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-xs font-medium uppercase tracking-[0.22em] text-muted">
-                Equity Curve
-              </h2>
+            <div className="mb-1 flex items-center justify-between">
+              <div className="flex items-baseline gap-3">
+                <h2 className="text-xs font-medium uppercase tracking-[0.22em] text-muted">
+                  Equity Curve
+                </h2>
+                {curve.length > 0 && (
+                  <span
+                    className={`tabular text-sm font-medium ${pnlClass(
+                      curve[curve.length - 1].pct,
+                    )}`}
+                  >
+                    {fmtPct(curve[curve.length - 1].pct)}
+                  </span>
+                )}
+              </div>
               <CurveModeToggle mode={mode} />
             </div>
+            <p className="mb-3 text-xs text-muted">{MODE_CAPTION[mode]}</p>
             {curve.length === 0 ? (
               <EmptyState
                 title="暂无曲线数据"
-                hint="需要先有成交与现金流;刷新行情后曲线会更完整。"
+                hint="净值曲线由成交与现金流计算得出 —— 先导入对账单。"
               />
             ) : (
               <EquityCurve points={curve} />
