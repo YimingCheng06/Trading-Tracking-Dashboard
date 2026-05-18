@@ -11,6 +11,7 @@ in a later milestone.
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.db.enums import AssetClass
 from app.db.models import Account, CashFlow, CorporateAction, Instrument, Trade
 from app.services.ledger.account_ledger import AccountLedger
 from app.services.ledger.rows import LedgerAccount, LedgerInstrument
@@ -166,6 +167,36 @@ def project_cash_flows(
     session.flush()
 
 
+def _get_or_stub_instrument(
+    session: Session, symbol: str, instruments: dict[str, Instrument]
+) -> Instrument:
+    """Return the Instrument for *symbol*, falling back to DB lookup then stub.
+
+    Corporate actions (e.g. symbol changes) can reference instruments that are
+    not in the local instruments.csv because the new symbol hasn't been traded
+    yet.  Rather than raising, we look the instrument up in the DB first (it
+    may exist from another account's import), then create a minimal stub so the
+    corporate action row can still be recorded.
+    """
+    inst = instruments.get(symbol)
+    if inst is not None:
+        return inst
+    inst = session.scalar(
+        select(Instrument).where(
+            Instrument.symbol == symbol,
+            Instrument.asset_class == AssetClass.STOCK,
+            Instrument.strike.is_(None),
+            Instrument.expiry.is_(None),
+            Instrument.option_type.is_(None),
+        )
+    )
+    if inst is None:
+        inst = Instrument(symbol=symbol, asset_class=AssetClass.STOCK, currency="USD")
+        session.add(inst)
+        session.flush()
+    return inst
+
+
 def project_corporate_actions(
     session: Session,
     ledger: AccountLedger,
@@ -175,16 +206,13 @@ def project_corporate_actions(
 
     corporate_actions is a global, instrument-scoped table — upserted rather
     than deleted-per-account, since the same action may appear in several
-    accounts' ledgers. Raises ValueError on an unknown instrument; on that
-    error the session is left uncommitted and the caller must roll back.
+    accounts' ledgers.  If a corporate action references an instrument that is
+    not in instruments.csv (e.g. the new symbol in a symbol-change event), the
+    instrument is looked up in the DB or auto-created as a stub so the event
+    can still be recorded.
     """
     for lca in ledger.corporate_actions.read():
-        inst = instruments.get(lca.instrument)
-        if inst is None:
-            raise ValueError(
-                f"corporate action references unknown instrument "
-                f"{lca.instrument!r} (not in instruments.csv)"
-            )
+        inst = _get_or_stub_instrument(session, lca.instrument, instruments)
         ca = session.scalar(
             select(CorporateAction).where(
                 CorporateAction.instrument_id == inst.id,
