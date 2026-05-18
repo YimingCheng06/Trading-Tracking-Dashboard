@@ -27,19 +27,17 @@ def _holdings_value(snapshot: PositionSnapshot) -> Decimal:
 
 
 def build_day_points(session: Session, account: Account) -> list[DayPoint]:
-    """Aggregate snapshots + cash flows + trades into a daily DayPoint series."""
+    """Aggregate snapshots + cash flows + trades into a daily DayPoint series.
+
+    A DayPoint is emitted for every day with a position snapshot OR a
+    deposit/withdrawal, so every external flow is attributed to exactly one
+    day (the equity curve sums net_flow to get cumulative deposits). On a day
+    with no snapshot — a weekend, or before the first trade — holdings carry
+    forward from the most recent snapshot (0 before the first one).
+    """
     snapshots = session.scalars(
         select(PositionSnapshot).where(PositionSnapshot.account_id == account.id)
     ).all()
-    if not snapshots:
-        return []
-
-    holdings: dict[date, Decimal] = {}
-    for s in snapshots:
-        holdings[s.snapshot_date] = (
-            holdings.get(s.snapshot_date, Decimal("0")) + _holdings_value(s)
-        )
-
     cash_flows = session.scalars(
         select(CashFlow).where(CashFlow.account_id == account.id)
     ).all()
@@ -47,8 +45,24 @@ def build_day_points(session: Session, account: Account) -> list[DayPoint]:
         select(Trade).where(Trade.account_id == account.id)
     ).all()
 
+    holdings_by_day: dict[date, Decimal] = {}
+    for s in snapshots:
+        holdings_by_day[s.snapshot_date] = (
+            holdings_by_day.get(s.snapshot_date, Decimal("0")) + _holdings_value(s)
+        )
+
+    days = set(holdings_by_day)
+    for cf in cash_flows:
+        if cf.flow_type in (CashFlowType.DEPOSIT, CashFlowType.WITHDRAWAL):
+            days.add(cf.occurred_at.date())
+    if not days:
+        return []
+
     points: list[DayPoint] = []
-    for day in sorted(holdings):
+    holdings = Decimal("0")  # carried forward across days without a snapshot
+    for day in sorted(days):
+        if day in holdings_by_day:
+            holdings = holdings_by_day[day]
         cash = Decimal("0")
         for cf in cash_flows:
             if cf.occurred_at.date() <= day:
@@ -72,7 +86,7 @@ def build_day_points(session: Session, account: Account) -> list[DayPoint]:
         points.append(
             DayPoint(
                 on_date=day,
-                portfolio_value=cash + holdings[day],
+                portfolio_value=cash + holdings,
                 net_flow=net_flow,
             )
         )

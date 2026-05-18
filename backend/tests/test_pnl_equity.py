@@ -46,7 +46,7 @@ def _buy(account, instrument, qty, proceeds_usd, executed_at, trade_id):
 def test_build_day_points_portfolio_value_is_cash_plus_holdings(
     db_session, account, instrument
 ):
-    # Deposit 5000 on Jan 1; buy 10 shares for 1000 on Jan 2.
+    # Deposit 5000 on Jan 1 (before any trade); buy 10 shares for 1000 on Jan 2.
     db_session.add(
         _cash_flow(account, CashFlowType.DEPOSIT, "5000", datetime(2026, 1, 1, 9))
     )
@@ -61,12 +61,72 @@ def test_build_day_points_portfolio_value_is_cash_plus_holdings(
     db_session.commit()
 
     points = build_day_points(db_session, account)
+    by_date = {p.on_date: p for p in points}
 
-    assert [p.on_date for p in points] == [date(2026, 1, 2), date(2026, 1, 5)]
+    # The Jan 1 deposit gets its own day even though there is no snapshot yet.
+    assert by_date[date(2026, 1, 1)].portfolio_value == Decimal("5000")  # cash only
+    assert by_date[date(2026, 1, 1)].net_flow == Decimal("5000")
     # Jan 2: cash = 5000 - 1000 = 4000 ; holdings = 1000 ; total = 5000.
-    assert points[0].portfolio_value == Decimal("5000")
+    assert by_date[date(2026, 1, 2)].portfolio_value == Decimal("5000")
     # Jan 5: cash = 4000 ; holdings = 1100 ; total = 5100.
-    assert points[1].portfolio_value == Decimal("5100")
+    assert by_date[date(2026, 1, 5)].portfolio_value == Decimal("5100")
+
+
+def test_build_day_points_attributes_flow_on_non_snapshot_day(
+    db_session, account, instrument
+):
+    # A withdrawal on Jan 4 — a day with no snapshot row — must still get a
+    # DayPoint, or its net_flow is lost from the curve's deposit accounting.
+    db_session.add_all(
+        [
+            _cash_flow(account, CashFlowType.DEPOSIT, "5000", datetime(2026, 1, 2, 9)),
+            _cash_flow(account, CashFlowType.WITHDRAWAL, "-500", datetime(2026, 1, 4, 9)),
+        ]
+    )
+    db_session.add(_buy(account, instrument, 1, "100", datetime(2026, 1, 2, 10), "B1"))
+    db_session.add_all(
+        [
+            _snapshot(account, instrument, date(2026, 1, 2), 1, 100, "100"),
+            _snapshot(account, instrument, date(2026, 1, 5), 1, 100, "100"),
+        ]
+    )
+    db_session.commit()
+
+    points = build_day_points(db_session, account)
+    by_date = {p.on_date: p for p in points}
+
+    assert by_date[date(2026, 1, 4)].net_flow == Decimal("-500")
+    # Holdings carry forward onto the non-snapshot day: cash 4400 + holdings 100.
+    assert by_date[date(2026, 1, 4)].portfolio_value == Decimal("4500")
+    # net_flow over the whole series equals deposits minus withdrawals.
+    assert sum(p.net_flow for p in points) == Decimal("4500")
+
+
+def test_compute_account_curve_with_deposit_before_first_trade(
+    db_session, account, instrument
+):
+    # Regression: a deposit before the first trade was dropped from net_flow,
+    # leaving Mode B with zero net deposits (pct = None for the whole curve).
+    db_session.add(
+        _cash_flow(account, CashFlowType.DEPOSIT, "1000", datetime(2026, 1, 1, 9))
+    )
+    db_session.add(_buy(account, instrument, 10, "1000", datetime(2026, 1, 2, 10), "B1"))
+    db_session.add_all(
+        [
+            _snapshot(account, instrument, date(2026, 1, 2), 10, 100, "1000"),
+            _snapshot(account, instrument, date(2026, 1, 5), 10, 100, "1100"),
+        ]
+    )
+    db_session.commit()
+
+    curve = compute_account_curve(db_session, account, "B")
+    by_date = {c.on_date: c for c in curve}
+
+    assert by_date[date(2026, 1, 1)].cumulative_pnl == Decimal("0")
+    assert by_date[date(2026, 1, 2)].cumulative_pnl == Decimal("0")
+    assert by_date[date(2026, 1, 5)].cumulative_pnl == Decimal("100")
+    # Final net deposits = 1000 → Mode B percentage is defined.
+    assert by_date[date(2026, 1, 5)].pct == Decimal("100") / Decimal("1000")
 
 
 def test_build_day_points_net_flow_is_deposits_minus_withdrawals(
