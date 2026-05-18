@@ -89,6 +89,17 @@ def test_corporate_action_dedup_key():
     assert ca.dedup_key == ("AAPL", CorporateActionType.SPLIT, date(2024, 6, 10))
 
 
+def test_corporate_action_dedup_key_prefers_external_id():
+    ca = rows.LedgerCorporateAction(
+        instrument="AAPL",
+        action_type=CorporateActionType.SPLIT,
+        ex_date=date(2024, 6, 10),
+        ratio=Decimal("10"),
+        external_id="ACT-42",
+    )
+    assert ca.dedup_key == ("ACT-42",)
+
+
 def test_account_model():
     acct = rows.LedgerAccount(
         broker_account_id="U1", name="Main", base_currency="USD"
