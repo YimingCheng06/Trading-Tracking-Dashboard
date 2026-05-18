@@ -12,8 +12,9 @@ import hashlib
 from datetime import date, datetime
 from decimal import Decimal
 
-from app.db.enums import AssetClass, OptionType, TradeSide
-from app.services.ledger.rows import LedgerInstrument, LedgerTrade
+from app.db.enums import AssetClass, CashFlowType, OptionType, TradeSide
+from app.services.fx.provider import FxRateProvider
+from app.services.ledger.rows import LedgerCashFlow, LedgerInstrument, LedgerTrade
 
 _ASSET_CLASS = {"STK": AssetClass.STOCK, "OPT": AssetClass.OPTION}
 _OPTION_TYPE = {"P": OptionType.PUT, "C": OptionType.CALL}
@@ -140,3 +141,60 @@ def _parse_trades(
             )
         )
     return list(instruments.values()), trades, fx_rates
+
+
+# Cash Transaction `Type` -> CashFlowType. "Deposits/Withdrawals" is
+# sign-dependent and handled separately. "Withholding Tax" maps to OTHER:
+# CashFlowType.TAX was removed from scope; OTHER keeps the cash balance
+# correct and the description preserves the original label.
+_CASH_TYPE = {
+    "Other Fees": CashFlowType.FEE,
+    "Broker Interest Received": CashFlowType.INTEREST,
+    "Dividends": CashFlowType.DIVIDEND,
+    "Withholding Tax": CashFlowType.OTHER,
+}
+
+
+def _parse_cash(
+    rows: list[dict[str, str]], fx_provider: FxRateProvider
+) -> list[LedgerCashFlow]:
+    """Map Cash Transactions rows to LedgerCashFlow.
+
+    Non-USD amounts are converted to USD via `fx_provider`. Raises
+    ValueError on an unknown `Type`.
+    """
+    flows: list[LedgerCashFlow] = []
+    for row in rows:
+        type_label = row["Type"]
+        amount = Decimal(row["Amount"])
+        if type_label == "Deposits/Withdrawals":
+            flow_type = CashFlowType.DEPOSIT if amount > 0 else CashFlowType.WITHDRAWAL
+        elif type_label in _CASH_TYPE:
+            flow_type = _CASH_TYPE[type_label]
+        else:
+            raise ValueError(f"unknown cash Type {type_label!r}: {row}")
+
+        currency = row["CurrencyPrimary"]
+        occurred_at = _parse_dt(row["Date/Time"])
+        if currency == "USD":
+            rate = Decimal("1")
+        else:
+            rate = fx_provider.get_rate(currency, occurred_at.date())
+            if rate is None:
+                raise ValueError(f"no FX rate for {currency} on {occurred_at.date()}")
+        flows.append(
+            LedgerCashFlow(
+                flow_type=flow_type,
+                instrument=row["Symbol"] or None,
+                currency=currency,
+                fx_rate_to_usd=rate,
+                amount_orig=amount,
+                amount_usd=amount * rate,
+                description=type_label,
+                external_id=_content_hash(
+                    type_label, row["Date/Time"], row["Amount"], row["Symbol"]
+                ),
+                occurred_at=occurred_at,
+            )
+        )
+    return flows

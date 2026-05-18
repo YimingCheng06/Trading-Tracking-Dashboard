@@ -3,10 +3,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from app.db.enums import AssetClass, OptionType, TradeSide
+from app.db.enums import AssetClass, CashFlowType, OptionType, TradeSide
+from app.services.fx.provider import StatementFxProvider
 from app.services.parsers.ibkr_flex import (
     _content_hash,
     _dec,
+    _parse_cash,
     _parse_dt,
     _parse_trades,
     _split_sections,
@@ -120,3 +122,66 @@ def test_parse_trades_rejects_unknown_asset_class():
         raise AssertionError("expected ValueError")
     except ValueError as e:
         assert "FUT" in str(e)
+
+
+# ---------------------------------------------------------------------------
+# Task 4: _parse_cash
+# ---------------------------------------------------------------------------
+
+
+def _cash_section():
+    with FIXTURE.open(newline="") as f:
+        rows = list(csv.reader(f))
+    header, data = _split_sections(rows)[2]
+    return [dict(zip(header, r, strict=False)) for r in data]
+
+
+# CAD rates the fixture's forex rows would give: 1/1.4 on 2026-01-01, 1/1.25 on 2026-03-01
+_FX = StatementFxProvider(
+    {
+        ("CAD", date(2026, 1, 1)): Decimal("1") / Decimal("1.4"),
+        ("CAD", date(2026, 3, 1)): Decimal("1") / Decimal("1.25"),
+    }
+)
+
+
+def test_parse_cash_deposit_and_withdrawal_by_sign():
+    flows = _parse_cash(_cash_section(), _FX)
+    deposit = next(f for f in flows if f.amount_orig == Decimal("5000"))
+    assert deposit.flow_type is CashFlowType.DEPOSIT
+    withdrawal = next(f for f in flows if f.amount_orig == Decimal("-200"))
+    assert withdrawal.flow_type is CashFlowType.WITHDRAWAL
+
+
+def test_parse_cash_converts_cad_to_usd():
+    flows = _parse_cash(_cash_section(), _FX)
+    deposit = next(f for f in flows if f.amount_orig == Decimal("5000"))
+    assert deposit.currency == "CAD"
+    assert deposit.fx_rate_to_usd == Decimal("1") / Decimal("1.4")
+    assert deposit.amount_usd == Decimal("5000") * (Decimal("1") / Decimal("1.4"))
+
+
+def test_parse_cash_type_mapping():
+    flows = _parse_cash(_cash_section(), _FX)
+    by_type = {f.description: f.flow_type for f in flows}
+    assert by_type["Other Fees"] is CashFlowType.FEE
+    assert by_type["Broker Interest Received"] is CashFlowType.INTEREST
+    assert by_type["Dividends"] is CashFlowType.DIVIDEND
+    assert by_type["Withholding Tax"] is CashFlowType.OTHER
+
+
+def test_parse_cash_usd_rows_have_rate_one():
+    flows = _parse_cash(_cash_section(), _FX)
+    fee = next(f for f in flows if f.description == "Other Fees")
+    assert fee.fx_rate_to_usd == Decimal("1")
+    assert fee.amount_usd == Decimal("-10")
+
+
+def test_parse_cash_rejects_unknown_type():
+    rows = _cash_section()
+    rows[0] = {**rows[0], "Type": "Mystery"}
+    try:
+        _parse_cash(rows, _FX)
+        raise AssertionError("expected ValueError")
+    except ValueError as e:
+        assert "Mystery" in str(e)
