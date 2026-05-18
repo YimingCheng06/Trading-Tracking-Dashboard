@@ -1,8 +1,9 @@
 """ECB daily FX rates via the Frankfurter API (free, no API key).
 
-Frankfurter (https://api.frankfurter.app) serves ECB reference rates. We
+Frankfurter (https://api.frankfurter.dev) serves ECB reference rates. We
 request one day + currency pair, cache the result, and reuse the cache on
-subsequent lookups. The httpx client is injectable so tests can mock it.
+subsequent lookups. The httpx client is injectable so tests can mock it;
+the default client follows redirects so an API endpoint move keeps working.
 """
 
 from datetime import date
@@ -13,7 +14,7 @@ import httpx
 from app.services.fx.cache import FxRateCache
 from app.services.fx.provider import FxRateProvider
 
-_BASE_URL = "https://api.frankfurter.app"
+_BASE_URL = "https://api.frankfurter.dev/v1"
 
 
 class EcbFxProvider(FxRateProvider):
@@ -21,7 +22,7 @@ class EcbFxProvider(FxRateProvider):
         self, cache: FxRateCache, client: httpx.Client | None = None
     ) -> None:
         self._cache = cache
-        self._client = client or httpx.Client()
+        self._client = client or httpx.Client(follow_redirects=True)
 
     def get_rate(self, currency: str, on_date: date) -> Decimal | None:
         if currency == "USD":
