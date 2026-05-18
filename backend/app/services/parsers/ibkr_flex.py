@@ -100,10 +100,16 @@ def _parse_trades(
             left, right = row["Symbol"].split(".")
             price = Decimal(row["TradePrice"])
             on = date.fromisoformat(row["TradeDate"])
+            # Several conversions for one currency/date may appear; the
+            # last rate seen wins — fine for a "statement's own rate" hint.
             if left == "USD":
                 fx_rates[(right, on)] = Decimal("1") / price
             elif right == "USD":
                 fx_rates[(left, on)] = price
+            else:
+                raise ValueError(
+                    f"forex pair with no USD leg: {row['Symbol']!r}"
+                )
             continue
         if asset not in _ASSET_CLASS:
             raise ValueError(f"unknown trade AssetClass {asset!r}: {row}")

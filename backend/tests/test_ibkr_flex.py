@@ -131,6 +131,25 @@ def test_parse_trades_rejects_unknown_asset_class():
         assert "FUT" in str(e)
 
 
+def test_parse_trades_forex_pair_with_usd_as_quote():
+    # A `CAD.USD`-style pair (USD on the right leg) yields the price directly.
+    cash = next(r for r in _trades_section() if r["AssetClass"] == "CASH")
+    cash = {**cash, "Symbol": "CAD.USD"}
+    _, _, fx = _parse_trades([cash])
+    on = date.fromisoformat(cash["TradeDate"])
+    assert fx[("CAD", on)] == Decimal(cash["TradePrice"])
+
+
+def test_parse_trades_rejects_forex_pair_without_usd():
+    cash = next(r for r in _trades_section() if r["AssetClass"] == "CASH")
+    cash = {**cash, "Symbol": "EUR.CAD"}
+    try:
+        _parse_trades([cash])
+        raise AssertionError("expected ValueError")
+    except ValueError as e:
+        assert "USD" in str(e)
+
+
 # ---------------------------------------------------------------------------
 # Task 4: _parse_cash
 # ---------------------------------------------------------------------------
