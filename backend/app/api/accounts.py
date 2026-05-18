@@ -46,6 +46,7 @@ def get_positions(
                 PositionSnapshot.instrument_id == p.instrument_id,
             )
             .order_by(PositionSnapshot.snapshot_date.desc())
+            .limit(1)
         )
         out.append(
             schemas.PositionOut(
