@@ -1,17 +1,16 @@
-import { PlaceholderPage } from "../_components/PlaceholderPage";
 import { IconUpload } from "../_components/icons";
+import { PageShell } from "../_components/PageShell";
+import { UploadForm } from "../_components/UploadForm";
 
 export default function UploadPage() {
   return (
-    <PlaceholderPage
+    <PageShell
       group="Activity"
       title="Upload Statements"
-      subtitle="Drop IBKR Daily Activity Statements (CSV / HTML) here — parsed into trades, positions, dividends, fees."
+      subtitle="导入 IBKR Flex Query CSV —— 解析成交、现金流、公司行动。重复导入按 ID 幂等。"
       icon={IconUpload}
-      notes={[
-        "Phase 1 entry point: every other screen depends on this importer",
-        "Idempotent by statement ID — re-upload is safe",
-      ]}
-    />
+    >
+      <UploadForm />
+    </PageShell>
   );
 }
