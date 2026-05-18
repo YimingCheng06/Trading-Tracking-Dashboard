@@ -3,12 +3,13 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from app.db.enums import AssetClass, CashFlowType, OptionType, TradeSide
+from app.db.enums import AssetClass, CashFlowType, CorporateActionType, OptionType, TradeSide
 from app.services.fx.provider import StatementFxProvider
 from app.services.parsers.ibkr_flex import (
     _content_hash,
     _dec,
     _parse_cash,
+    _parse_corp,
     _parse_dt,
     _parse_trades,
     _split_sections,
@@ -185,3 +186,26 @@ def test_parse_cash_rejects_unknown_type():
         raise AssertionError("expected ValueError")
     except ValueError as e:
         assert "Mystery" in str(e)
+
+
+# ---------------------------------------------------------------------------
+# Task 5: _parse_corp
+# ---------------------------------------------------------------------------
+
+
+def _corp_section():
+    with FIXTURE.open(newline="") as f:
+        rows = list(csv.reader(f))
+    header, data = _split_sections(rows)[1]
+    return [dict(zip(header, r, strict=False)) for r in data]
+
+
+def test_parse_corp_pairs_symbol_change():
+    actions = _parse_corp(_corp_section())
+    assert len(actions) == 1
+    action = actions[0]
+    assert action.action_type is CorporateActionType.SYMBOL_CHANGE
+    assert action.instrument == "NEWX"
+    assert action.ex_date == date(2026, 2, 1)
+    assert action.ratio == Decimal("1")
+    assert "OLDX.OLD" in action.description and "NEWX" in action.description

@@ -12,9 +12,14 @@ import hashlib
 from datetime import date, datetime
 from decimal import Decimal
 
-from app.db.enums import AssetClass, CashFlowType, OptionType, TradeSide
+from app.db.enums import AssetClass, CashFlowType, CorporateActionType, OptionType, TradeSide
 from app.services.fx.provider import FxRateProvider
-from app.services.ledger.rows import LedgerCashFlow, LedgerInstrument, LedgerTrade
+from app.services.ledger.rows import (
+    LedgerCashFlow,
+    LedgerCorporateAction,
+    LedgerInstrument,
+    LedgerTrade,
+)
 
 _ASSET_CLASS = {"STK": AssetClass.STOCK, "OPT": AssetClass.OPTION}
 _OPTION_TYPE = {"P": OptionType.PUT, "C": OptionType.CALL}
@@ -198,3 +203,42 @@ def _parse_cash(
             )
         )
     return flows
+
+
+def _parse_corp(rows: list[dict[str, str]]) -> list[LedgerCorporateAction]:
+    """Map Corporate Actions rows to LedgerCorporateAction.
+
+    Rows sharing a Date/Time form one event. The supported pattern is a
+    symbol change: a `<ticker>.OLD` row (negative quantity) paired with
+    the new ticker (positive quantity). Raises ValueError on any other
+    shape — unrecognised corporate actions are surfaced, not guessed.
+    """
+    by_time: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        by_time.setdefault(row["Date/Time"], []).append(row)
+
+    actions: list[LedgerCorporateAction] = []
+    for when, group in by_time.items():
+        old = [r for r in group if r["Symbol"].endswith(".OLD")]
+        new = [r for r in group if not r["Symbol"].endswith(".OLD")]
+        if len(old) != 1 or len(new) != 1:
+            raise ValueError(f"unrecognised corporate action group: {group}")
+        old_row, new_row = old[0], new[0]
+        old_qty = abs(Decimal(old_row["Quantity"]))
+        new_qty = abs(Decimal(new_row["Quantity"]))
+        actions.append(
+            LedgerCorporateAction(
+                instrument=new_row["Symbol"],
+                action_type=CorporateActionType.SYMBOL_CHANGE,
+                ex_date=_parse_dt(when).date(),
+                ratio=new_qty / old_qty,
+                description=(
+                    f"{old_row['Symbol']} → {new_row['Symbol']} "
+                    f"({old_qty}:{new_qty})"
+                ),
+                external_id=_content_hash(
+                    old_row["Symbol"], new_row["Symbol"], when
+                ),
+            )
+        )
+    return actions
