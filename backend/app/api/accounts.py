@@ -1,5 +1,7 @@
 """Account-scoped HTTP endpoints."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,6 +11,7 @@ from app.api.deps import get_account
 from app.db.base import get_db
 from app.db.models import Account, Instrument, PositionSnapshot, Trade
 from app.services.pnl.engine import compute_positions, compute_realized_pnl
+from app.services.pnl.equity import compute_account_curve
 
 router = APIRouter(tags=["accounts"])
 
@@ -102,3 +105,20 @@ def get_pnl(
         open_position_count=len(compute_positions(db, account)),
         base_currency=account.base_currency,
     )
+
+
+@router.get(
+    "/accounts/{account_id}/curve",
+    response_model=list[schemas.CurvePointOut],
+)
+def get_curve(
+    account: Account = Depends(get_account),
+    db: Session = Depends(get_db),
+    mode: Literal["A", "B"] = "B",
+) -> list[schemas.CurvePointOut]:
+    return [
+        schemas.CurvePointOut(
+            on_date=c.on_date, cumulative_pnl=c.cumulative_pnl, pct=c.pct
+        )
+        for c in compute_account_curve(db, account, mode)
+    ]

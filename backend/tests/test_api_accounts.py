@@ -52,3 +52,19 @@ def test_get_pnl_returns_realized(api_client):
 
 def test_unknown_account_returns_404(api_client):
     assert api_client.get("/accounts/UNKNOWN/positions").status_code == 404
+
+
+def test_get_curve_returns_points(api_client):
+    _upload(api_client)
+    response = api_client.get("/accounts/U0000000/curve")
+    assert response.status_code == 200
+    points = response.json()
+    # Cash flows alone (no price refresh) still yield curve points on
+    # deposit/withdrawal days.
+    assert len(points) > 0
+    assert {"on_date", "cumulative_pnl", "pct"} <= set(points[0])
+
+
+def test_get_curve_rejects_bad_mode(api_client):
+    _upload(api_client)
+    assert api_client.get("/accounts/U0000000/curve?mode=Z").status_code == 422

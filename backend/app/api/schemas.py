@@ -1,6 +1,6 @@
 """Pydantic response models for the HTTP API."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -56,3 +56,9 @@ class PnlOut(BaseModel):
     realized_pnl: Decimal
     open_position_count: int
     base_currency: str
+
+
+class CurvePointOut(BaseModel):
+    on_date: date
+    cumulative_pnl: Decimal
+    pct: Decimal | None
