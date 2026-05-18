@@ -7,11 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api import schemas
-from app.api.deps import get_account
+from app.api.deps import get_account, get_market_data_provider
 from app.db.base import get_db
 from app.db.models import Account, Instrument, PositionSnapshot, Trade
 from app.services.pnl.engine import compute_positions, compute_realized_pnl
 from app.services.pnl.equity import compute_account_curve
+from app.services.providers.base import MarketDataProvider
+from app.services.snapshot.builder import rebuild_snapshots
 
 router = APIRouter(tags=["accounts"])
 
@@ -122,3 +124,22 @@ def get_curve(
         )
         for c in compute_account_curve(db, account, mode)
     ]
+
+
+@router.post(
+    "/accounts/{account_id}/refresh-prices",
+    response_model=schemas.RefreshResultOut,
+)
+def refresh_prices(
+    account: Account = Depends(get_account),
+    db: Session = Depends(get_db),
+    provider: MarketDataProvider = Depends(get_market_data_provider),
+) -> schemas.RefreshResultOut:
+    """Fetch market data and rebuild this account's positions_snapshot.
+
+    The only endpoint that touches the network (Yahoo).
+    """
+    rows = rebuild_snapshots(db, account, provider)
+    return schemas.RefreshResultOut(
+        broker_account_id=account.broker_account_id, snapshot_rows=rows
+    )

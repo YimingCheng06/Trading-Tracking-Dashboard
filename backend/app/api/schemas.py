@@ -62,3 +62,8 @@ class CurvePointOut(BaseModel):
     on_date: date
     cumulative_pnl: Decimal
     pct: Decimal | None
+
+
+class RefreshResultOut(BaseModel):
+    broker_account_id: str
+    snapshot_rows: int

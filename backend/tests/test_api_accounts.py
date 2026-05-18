@@ -1,6 +1,8 @@
 from decimal import Decimal
 from pathlib import Path
 
+from app.services.providers.base import MarketDataProvider
+
 
 def test_list_accounts_empty(api_client):
     response = api_client.get("/accounts")
@@ -68,3 +70,40 @@ def test_get_curve_returns_points(api_client):
 def test_get_curve_rejects_bad_mode(api_client):
     _upload(api_client)
     assert api_client.get("/accounts/U0000000/curve?mode=Z").status_code == 422
+
+
+class _FakeProvider(MarketDataProvider):
+    """Returns a flat price for every symbol — keeps refresh tests offline."""
+
+    def get_daily_closes(self, symbol, start, end):
+        from datetime import timedelta
+
+        day = start
+        out = {}
+        while day <= end:
+            if day.weekday() < 5:  # weekdays only
+                out[day] = Decimal("100")
+            day += timedelta(days=1)
+        return out
+
+    def get_latest_close(self, symbol):
+        return Decimal("100")
+
+
+def test_refresh_prices_builds_snapshots(api_client):
+    from app.api.deps import get_market_data_provider
+    from app.main import app
+
+    _upload(api_client)
+    app.dependency_overrides[get_market_data_provider] = lambda: _FakeProvider()
+    try:
+        response = api_client.post("/accounts/U0000000/refresh-prices")
+    finally:
+        del app.dependency_overrides[get_market_data_provider]
+
+    assert response.status_code == 200
+    assert response.json()["snapshot_rows"] > 0
+
+
+def test_refresh_prices_unknown_account_404(api_client):
+    assert api_client.post("/accounts/UNKNOWN/refresh-prices").status_code == 404
