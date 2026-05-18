@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { accounts } from "../_config/workspace";
+import type { Account } from "@/lib/api";
+import { accountTint, accountShort } from "@/lib/accounts";
 import { IconPlus } from "./icons";
 
 /**
- * Leftmost 72px rail: account switcher. Discord-style rounded-square icons
- * that morph shape on active / hover. Pure client state — persisting the
- * selection to URL / localStorage is a Phase 1 concern.
+ * 最左 72px 栏:账户切换器。账户来自 GET /accounts,选中态由父级
+ * 从 URL 解析后下传。无账户时只显示 Logo + Add。
  */
 export function AccountRail({
+  accounts,
   activeId,
   onSelect,
 }: {
+  accounts: Account[];
   activeId: string;
   onSelect: (id: string) => void;
 }) {
@@ -24,14 +26,14 @@ export function AccountRail({
       <Logo />
       <Divider />
       <ul className="flex flex-col gap-3">
-        {accounts.map((acct) => (
-          <li key={acct.id}>
+        {accounts.map((acct, i) => (
+          <li key={acct.broker_account_id}>
             <AccountPill
-              label={acct.label}
-              short={acct.short}
-              tint={acct.tint}
-              active={activeId === acct.id}
-              onClick={() => onSelect(acct.id)}
+              label={acct.name}
+              short={accountShort(acct)}
+              tint={accountTint(i)}
+              active={activeId === acct.broker_account_id}
+              onClick={() => onSelect(acct.broker_account_id)}
             />
           </li>
         ))}
