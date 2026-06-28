@@ -1,8 +1,9 @@
 """Account-scoped HTTP endpoints."""
 
+from dataclasses import asdict
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,6 +15,7 @@ from app.services.pnl.engine import compute_positions, compute_realized_pnl
 from app.services.pnl.equity import compute_account_curve
 from app.services.providers.base import MarketDataProvider
 from app.services.snapshot.builder import rebuild_snapshots
+from app.services.snapshot.live import LiveDataUnavailable, compute_live_snapshot
 
 router = APIRouter(tags=["accounts"])
 
@@ -142,4 +144,35 @@ def refresh_prices(
     rows = rebuild_snapshots(db, account, provider)
     return schemas.RefreshResultOut(
         broker_account_id=account.broker_account_id, snapshot_rows=rows
+    )
+
+
+@router.get(
+    "/accounts/{account_id}/live-snapshot",
+    response_model=schemas.LiveSnapshotOut,
+)
+def get_live_snapshot(
+    account: Account = Depends(get_account),
+    db: Session = Depends(get_db),
+    provider: MarketDataProvider = Depends(get_market_data_provider),
+    mode: Literal["A", "B"] = "B",
+) -> schemas.LiveSnapshotOut:
+    """Live overlay of positions + equity-curve tail; pure read, no DB writes."""
+    try:
+        snap = compute_live_snapshot(db, account, provider, mode)
+    except LiveDataUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"行情不可用: {', '.join(exc.missing)}",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="行情不可用") from exc
+    return schemas.LiveSnapshotOut(
+        fetched_at=snap.fetched_at,
+        positions=[schemas.PositionOut(**asdict(p)) for p in snap.positions],
+        curve_tail=schemas.CurveTailOut(
+            on_date=snap.curve_tail.on_date,
+            cumulative_pnl=snap.curve_tail.cumulative_pnl,
+            pct=snap.curve_tail.pct,
+        ),
     )
