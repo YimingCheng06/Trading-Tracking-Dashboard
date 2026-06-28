@@ -1,22 +1,11 @@
 import { api, type Account, type Position } from "@/lib/api";
-import { fmtMoney, fmtNum, pnlClass } from "@/lib/format";
 import { IconBriefcase } from "../_components/icons";
 import { PageShell } from "../_components/PageShell";
-import { DataTable, type Column } from "../_components/DataTable";
 import { EmptyState } from "../_components/EmptyState";
 import { RefreshPricesButton } from "../_components/RefreshPricesButton";
+import { LivePositionsTable } from "./_components/LivePositionsTable";
 
 export const dynamic = "force-dynamic";
-
-const COLUMNS: Column[] = [
-  { key: "symbol", label: "Symbol" },
-  { key: "qty", label: "Qty", numeric: true },
-  { key: "avg", label: "Avg Cost", numeric: true },
-  { key: "cost", label: "Cost Basis", numeric: true },
-  { key: "price", label: "Mkt Price", numeric: true },
-  { key: "value", label: "Mkt Value", numeric: true },
-  { key: "upnl", label: "Unrealized P&L", numeric: true },
-];
 
 export default async function PositionsPage({
   searchParams,
@@ -68,25 +57,7 @@ export default async function PositionsPage({
           hint="导入对账单后,持仓会在这里出现。"
         />
       ) : (
-        <DataTable
-          columns={COLUMNS}
-          rows={positions.map((p) => ({
-            id: p.symbol,
-            cells: [
-              <span key="s" className="font-medium text-foreground">
-                {p.symbol}
-              </span>,
-              fmtNum(p.quantity),
-              fmtMoney(p.average_cost),
-              fmtMoney(p.cost_basis),
-              fmtMoney(p.market_price),
-              fmtMoney(p.market_value),
-              <span key="u" className={pnlClass(p.unrealized_pnl)}>
-                {fmtMoney(p.unrealized_pnl)}
-              </span>,
-            ],
-          }))}
-        />
+        <LivePositionsTable initial={positions} accountId={accountId} />
       )}
     </PageShell>
   );
