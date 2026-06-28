@@ -114,7 +114,7 @@ export default async function PnlPage({
               hint="净值曲线由成交与现金流计算得出 —— 先导入对账单。"
             />
           ) : (
-            <LivePnlTail initial={curve} accountId={accountId} mode={mode} />
+            <LivePnlTail key={mode} initial={curve} accountId={accountId} mode={mode} />
           )}
         </div>
       )}
