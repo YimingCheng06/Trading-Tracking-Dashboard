@@ -16,7 +16,7 @@
 - `MarketDataProvider` 接口加 `get_latest_closes(symbols)` 批量方法;`YahooFinanceProvider` 用 `yfinance.download(...)` 单次拉多 symbol 实现。
 - 前端通用 `useLivePolling` hook(共享给 /positions 与 /pnl)。
 - `/positions` 与 `/pnl` 页面加 live 行为(SSR 初始值保持不变,客户端孤岛接管轮询)。
-- `/settings` 页面替换 PlaceholderPage,提供"频率"与"包含盘外"两项设置,存浏览器 localStorage。
+- `/settings/preferences` 页面替换 PlaceholderPage,加入 Live Data 区块(频率 + 包含盘外开关),存浏览器 localStorage。
 - 状态徽章组件 `LiveStatusBadge`:`Live · 23s 前` / `Market closed` / `Manual` / `行情不可用`。
 
 **不做(YAGNI / 留给后续):**
@@ -171,7 +171,7 @@ GET /accounts/{account_id}/live-snapshot?mode=B
 | `app/(workspace)/_components/LiveStatusBadge.tsx` | 接收 `{ status, lastFetchedAt }`,渲染 dot + 文案。变体:`Live · 23s 前`(绿点)/ `Market closed`(灰点)/ `Manual`(灰点)/ `行情不可用`(红点)。每秒重算 "X 秒前" 字符串 |
 | `app/(workspace)/positions/_components/LivePositionsTable.tsx` | `"use client"`,接收 SSR `initial: Position[]` 与 `accountId`,内部 `useLivePolling` + 渲染 DataTable + 右上角放 `LiveStatusBadge` |
 | `app/(workspace)/pnl/_components/LivePnlTail.tsx` | `"use client"`,接收 SSR `initial: { curve: CurvePoint[], pct: Decimal }` + `accountId` + `mode`,渲染 EquityCurve + 右上角 pct + 状态徽章;每次 tick 用 `replaceOrAppendLast(curve, curve_tail)` 更新曲线 |
-| `app/(workspace)/settings/_components/LiveDataSettings.tsx` | `"use client"`,radio(频率 30/60/120/Manual)+ checkbox(包含盘外)+ "保存" 按钮。保存写 localStorage 并触发 `storage` 事件让其它 tab 同步 |
+| `app/(workspace)/settings/preferences/_components/LiveDataSettings.tsx` | `"use client"`,radio(频率 30/60/120/Manual)+ checkbox(包含盘外)+ "保存" 按钮。保存写 localStorage 并 dispatch `storage` 事件让其它 tab 同步 |
 
 **改动文件:**
 
@@ -180,9 +180,9 @@ GET /accounts/{account_id}/live-snapshot?mode=B
 | `lib/api.ts` | 加 `api.liveSnapshot(accountId, mode)`;`LiveSnapshot` 类型导出 |
 | `app/(workspace)/positions/page.tsx` | 表格部分换成 `<LivePositionsTable initial={positions} accountId={accountId} />`;`RefreshPricesButton` 保留(它仍是冷启动重建 snapshot 的入口) |
 | `app/(workspace)/pnl/page.tsx` | 曲线 + 右上角 pct 部分换成 `<LivePnlTail initial={{ curve, pct: curve[curve.length-1].pct }} accountId={accountId} mode={mode} />` |
-| `app/(workspace)/settings/page.tsx` | PlaceholderPage 替换为 `<LiveDataSettings />` |
+| `app/(workspace)/settings/preferences/page.tsx` | PlaceholderPage 替换为承载 `<LiveDataSettings />` 的真页面(留出后续 Preferences 区块的空间,如 base currency / cost-basis method) |
 
-### 设置 UI 草图(/settings)
+### 设置 UI 草图(/settings/preferences)
 
 ```
 ┌─ Live Data ────────────────────────────────────────┐
@@ -255,7 +255,7 @@ GET /accounts/{account_id}/live-snapshot?mode=B
 6. 前端 `LiveStatusBadge` + `api.liveSnapshot` 客户端
 7. 前端 `LivePositionsTable` 接入 + /positions/page.tsx 改动
 8. 前端 `LivePnlTail` 接入 + /pnl/page.tsx 改动
-9. 前端 `/settings` 页面 + `LiveDataSettings` 表单
+9. 前端 `/settings/preferences` 页面替换 + `LiveDataSettings` 表单
 10. 浏览器手动冒烟(上方 9 条清单) + 合并
 
 ## 验收
