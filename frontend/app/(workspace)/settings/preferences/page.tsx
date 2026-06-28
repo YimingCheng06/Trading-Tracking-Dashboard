@@ -1,17 +1,16 @@
-import { PlaceholderPage } from "../../_components/PlaceholderPage";
 import { IconSliders } from "../../_components/icons";
+import { PageShell } from "../../_components/PageShell";
+import { LiveDataSettings } from "./_components/LiveDataSettings";
 
 export default function SettingsPreferencesPage() {
   return (
-    <PlaceholderPage
+    <PageShell
       group="Settings"
       title="Preferences"
-      subtitle="Base currency, cost-basis method, display density, theme accents."
+      subtitle="实时刷新、显示偏好等用户级设置。"
       icon={IconSliders}
-      notes={[
-        "Base currency picker drives every P&L conversion",
-        "FIFO vs average-cost decision is account-scoped",
-      ]}
-    />
+    >
+      <LiveDataSettings />
+    </PageShell>
   );
 }
