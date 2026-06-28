@@ -69,13 +69,7 @@ class RefreshResultOut(BaseModel):
     snapshot_rows: int
 
 
-class CurveTailOut(BaseModel):
-    on_date: date
-    cumulative_pnl: Decimal
-    pct: Decimal | None
-
-
 class LiveSnapshotOut(BaseModel):
     fetched_at: datetime
     positions: list[PositionOut]
-    curve_tail: CurveTailOut
+    curve_tail: CurvePointOut

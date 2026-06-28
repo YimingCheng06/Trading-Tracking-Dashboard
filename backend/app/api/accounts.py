@@ -1,5 +1,6 @@
 """Account-scoped HTTP endpoints."""
 
+import logging
 from dataclasses import asdict
 from typing import Literal
 
@@ -16,6 +17,8 @@ from app.services.pnl.equity import compute_account_curve
 from app.services.providers.base import MarketDataProvider
 from app.services.snapshot.builder import rebuild_snapshots
 from app.services.snapshot.live import LiveDataUnavailable, compute_live_snapshot
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["accounts"])
 
@@ -166,11 +169,15 @@ def get_live_snapshot(
             detail=f"行情不可用: {', '.join(exc.missing)}",
         ) from exc
     except Exception as exc:
+        logger.exception(
+            "live-snapshot computation failed for account %s",
+            account.broker_account_id,
+        )
         raise HTTPException(status_code=503, detail="行情不可用") from exc
     return schemas.LiveSnapshotOut(
         fetched_at=snap.fetched_at,
         positions=[schemas.PositionOut(**asdict(p)) for p in snap.positions],
-        curve_tail=schemas.CurveTailOut(
+        curve_tail=schemas.CurvePointOut(
             on_date=snap.curve_tail.on_date,
             cumulative_pnl=snap.curve_tail.cumulative_pnl,
             pct=snap.curve_tail.pct,
