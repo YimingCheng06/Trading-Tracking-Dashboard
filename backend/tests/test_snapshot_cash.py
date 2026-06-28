@@ -102,6 +102,39 @@ def test_compute_cash_at_sell_increases_cash(db_session, account, instrument):
     assert compute_cash_at(db_session, account, date(2026, 1, 6)) == Decimal("5099")
 
 
+def test_compute_cash_at_withdrawal_reduces_cash(db_session, account):
+    # IBKR encodes withdrawals as a negative amount_usd; the helper just sums
+    # amount_usd over all flow types, so this pins the sign convention.
+    db_session.add_all(
+        [
+            _cash_flow(account, CashFlowType.DEPOSIT, "5000", datetime(2026, 1, 1, 9)),
+            _cash_flow(account, CashFlowType.WITHDRAWAL, "-2000",
+                       datetime(2026, 1, 3, 9)),
+        ]
+    )
+    db_session.commit()
+    assert compute_cash_at(db_session, account, date(2026, 1, 5)) == Decimal("3000")
+
+
+def test_compute_cash_at_includes_dividend_and_interest(db_session, account):
+    # Dividends and interest credit cash, fees debit it — the helper sums all
+    # flow types so cash sees them all.
+    db_session.add_all(
+        [
+            _cash_flow(account, CashFlowType.DEPOSIT, "5000", datetime(2026, 1, 1, 9)),
+            _cash_flow(account, CashFlowType.DIVIDEND, "12",
+                       datetime(2026, 1, 2, 9)),
+            _cash_flow(account, CashFlowType.INTEREST, "3",
+                       datetime(2026, 1, 2, 9)),
+            _cash_flow(account, CashFlowType.FEE, "-1",
+                       datetime(2026, 1, 2, 9)),
+        ]
+    )
+    db_session.commit()
+    # 5000 + 12 + 3 - 1 = 5014
+    assert compute_cash_at(db_session, account, date(2026, 1, 5)) == Decimal("5014")
+
+
 def test_compute_cash_at_matches_build_day_points(db_session, account, instrument):
     """Parity: build_day_points and compute_cash_at agree on the cash component."""
     from app.db.models import PositionSnapshot
