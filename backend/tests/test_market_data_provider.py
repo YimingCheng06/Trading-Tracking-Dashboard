@@ -12,13 +12,16 @@ def test_market_data_provider_cannot_be_instantiated():
         MarketDataProvider()
 
 
-def test_market_data_provider_subclass_must_implement_both_methods():
+def test_market_data_provider_subclass_must_implement_all_methods():
     class Incomplete(MarketDataProvider):
         def get_daily_closes(self, symbol, start, end):
             return {}
 
+        def get_latest_close(self, symbol):
+            return None
+
     with pytest.raises(TypeError):
-        Incomplete()  # get_latest_close still abstract
+        Incomplete()  # get_latest_closes still abstract
 
 
 def test_market_data_provider_complete_subclass_works():
@@ -29,8 +32,15 @@ def test_market_data_provider_complete_subclass_works():
         def get_latest_close(self, symbol):
             return Decimal("10")
 
+        def get_latest_closes(self, symbols):
+            return {s: Decimal("10") for s in symbols}
+
     provider = Complete()
     assert provider.get_latest_close("X") == Decimal("10")
+    assert provider.get_latest_closes(["X", "Y"]) == {
+        "X": Decimal("10"),
+        "Y": Decimal("10"),
+    }
 
 
 def _fake_history(closes):
@@ -55,3 +65,34 @@ def test_yahoo_get_latest_close_returns_most_recent():
 def test_yahoo_get_latest_close_none_when_empty():
     provider = YahooFinanceProvider(history_fn=_fake_history({}))
     assert provider.get_latest_close("AAPL") is None
+
+
+def _fake_closes(by_symbol):
+    """Build a closes_fn that returns the pre-baked {symbol: Decimal} dict."""
+    def closes_fn(symbols):
+        return {s: by_symbol[s] for s in symbols if s in by_symbol}
+    return closes_fn
+
+
+def test_yahoo_get_latest_closes_returns_one_per_symbol():
+    provider = YahooFinanceProvider(
+        closes_fn=_fake_closes(
+            {"AAPL": Decimal("190.50"), "TSLA": Decimal("250.00")}
+        )
+    )
+    result = provider.get_latest_closes(["AAPL", "TSLA"])
+    assert result == {"AAPL": Decimal("190.50"), "TSLA": Decimal("250.00")}
+
+
+def test_yahoo_get_latest_closes_skips_missing_symbols():
+    provider = YahooFinanceProvider(
+        closes_fn=_fake_closes({"AAPL": Decimal("190.50")})
+    )
+    result = provider.get_latest_closes(["AAPL", "UNKNOWN"])
+    assert result == {"AAPL": Decimal("190.50")}
+    assert "UNKNOWN" not in result
+
+
+def test_yahoo_get_latest_closes_empty_list():
+    provider = YahooFinanceProvider(closes_fn=_fake_closes({}))
+    assert provider.get_latest_closes([]) == {}

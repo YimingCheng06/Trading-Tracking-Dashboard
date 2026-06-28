@@ -89,6 +89,9 @@ class _FakeProvider(MarketDataProvider):
     def get_latest_close(self, symbol):
         return Decimal("100")
 
+    def get_latest_closes(self, symbols):
+        return {s: Decimal("100") for s in symbols}
+
 
 def test_refresh_prices_builds_snapshots(api_client):
     from app.api.deps import get_market_data_provider

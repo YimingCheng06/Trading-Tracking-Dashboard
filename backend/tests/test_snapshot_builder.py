@@ -24,6 +24,13 @@ class _FakeProvider(MarketDataProvider):
         closes = self._closes.get(symbol, {})
         return closes[max(closes)] if closes else None
 
+    def get_latest_closes(self, symbols):
+        return {
+            s: self._closes[s][max(self._closes[s])]
+            for s in symbols
+            if s in self._closes and self._closes[s]
+        }
+
 
 def _trade(account, instrument, side, qty, proceeds_usd, *, trade_id, executed_at):
     return Trade(
