@@ -7,7 +7,7 @@ export default function UploadPage() {
     <PageShell
       group="Activity"
       title="Upload Statements"
-      subtitle="导入 IBKR Flex Query CSV —— 解析成交、现金流、公司行动。重复导入按 ID 幂等。"
+      subtitle="Import IBKR Flex Query CSV — parses trades, cash flows, and corporate actions. Re-imports are idempotent by execution ID."
       icon={IconUpload}
     >
       <UploadForm />

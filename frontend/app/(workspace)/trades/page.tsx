@@ -60,24 +60,24 @@ export default async function TradesPage({
     <PageShell
       group="Activity"
       title="Trades"
-      subtitle="导入对账单解析出的成交流水,按成交时间倒序。"
+      subtitle="Trade executions parsed from imported statements, most recent first."
       icon={IconArrowSwap}
     >
       {offline ? (
         <EmptyState
           tone="warn"
-          title="后端离线"
-          hint="无法连接 API。确认 backend 已在 :8000 运行。"
+          title="Backend offline"
+          hint="Cannot reach the API. Make sure the backend is running on :8000."
         />
       ) : !accountId ? (
         <EmptyState
-          title="还没有账户"
-          hint="先到 Upload 页导入一份 IBKR Flex 对账单。"
+          title="No accounts yet"
+          hint="Import an IBKR Flex statement on the Upload page first."
         />
       ) : trades.length === 0 ? (
         <EmptyState
-          title="该账户暂无成交"
-          hint="导入对账单后,成交会在这里出现。"
+          title="No trades for this account"
+          hint="Trades show up here after you import a statement."
         />
       ) : (
         <DataTable

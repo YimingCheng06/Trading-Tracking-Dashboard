@@ -45,7 +45,7 @@ export function UploadForm() {
     try {
       setReport(await api.uploadStatement(file));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "上传失败");
+      setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setBusy(false);
     }
@@ -71,14 +71,14 @@ export function UploadForm() {
       >
         <IconUpload width={32} height={32} className="text-accent" />
         <p className="text-sm text-muted-strong">
-          拖放 IBKR Flex CSV 到这里,或
+          Drop an IBKR Flex CSV here, or
         </p>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-accent hover:text-accent"
         >
-          选择文件
+          Choose file
         </button>
         <input
           ref={inputRef}
@@ -96,7 +96,7 @@ export function UploadForm() {
         disabled={!file || busy}
         className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-rail-deep transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {busy ? "导入中…" : "导入对账单"}
+        {busy ? "Importing…" : "Import statement"}
       </button>
 
       {error && (
@@ -107,7 +107,7 @@ export function UploadForm() {
 
       {report && (
         <div className="space-y-4">
-          <p className="text-sm font-medium text-up">导入完成。</p>
+          <p className="text-sm font-medium text-up">Import complete.</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {report.accounts.map((a) => (
               <div
@@ -134,7 +134,7 @@ export function UploadForm() {
               )}`}
               className="inline-block text-sm font-medium text-accent hover:underline"
             >
-              去 Positions 刷新行情 →
+              Go to Positions to refresh quotes →
             </Link>
           )}
         </div>

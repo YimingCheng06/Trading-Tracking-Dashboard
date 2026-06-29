@@ -73,19 +73,19 @@ export default async function PnlPage({
     <PageShell
       group="Analysis"
       title="P&L"
-      subtitle="已实现盈亏摘要与净值曲线。Mode A = IBKR/TWR;Mode B = 累计盈亏 ÷ 累计净入金。"
+      subtitle="Realized P&L summary and the equity curve. Mode A = IBKR/TWR; Mode B = cumulative P&L ÷ cumulative net deposits."
       icon={IconTrendingUp}
     >
       {offline ? (
         <EmptyState
           tone="warn"
-          title="后端离线"
-          hint="无法连接 API。确认 backend 已在 :8000 运行。"
+          title="Backend offline"
+          hint="Cannot reach the API. Make sure the backend is running on :8000."
         />
       ) : !accountId || !pnl ? (
         <EmptyState
-          title="还没有账户"
-          hint="先到 Upload 页导入一份 IBKR Flex 对账单。"
+          title="No accounts yet"
+          hint="Import an IBKR Flex statement on the Upload page first."
         />
       ) : (
         <div className="space-y-8">
@@ -99,19 +99,19 @@ export default async function PnlPage({
             <Metric
               label="Open Positions"
               value={String(pnl.open_position_count)}
-              sublabel="当前持仓数"
+              sublabel="Currently open"
             />
             <Metric
               label="Base Currency"
               value={pnl.base_currency}
-              sublabel="规范货币"
+              sublabel="Reporting currency"
             />
           </section>
 
           {curve.length === 0 ? (
             <EmptyState
-              title="暂无曲线数据"
-              hint="净值曲线由成交与现金流计算得出 —— 先导入对账单。"
+              title="No curve data yet"
+              hint="The equity curve is derived from trades and cash flows — import a statement first."
             />
           ) : (
             <LivePnlTail key={mode} initial={curve} accountId={accountId} mode={mode} />

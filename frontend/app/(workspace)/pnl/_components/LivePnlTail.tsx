@@ -9,8 +9,8 @@ import { CurveModeToggle } from "../../_components/CurveModeToggle";
 import { LiveStatusBadge } from "../../_components/LiveStatusBadge";
 
 const MODE_CAPTION: Record<CurveMode, string> = {
-  A: "口径 Mode A · TWR —— 过去净值点冻结,入金不重算历史。",
-  B: "口径 Mode B · 净入金 —— 累计盈亏 ÷ 当前累计净入金,入金重算整条曲线。",
+  A: "Mode A · TWR — past percentages stay frozen; deposits don't rescale history.",
+  B: "Mode B · Net deposits — cumulative P&L ÷ current cumulative net deposits; every deposit rescales the whole curve.",
 };
 
 function applyTail(curve: CurvePoint[], tail: CurveTail): CurvePoint[] {

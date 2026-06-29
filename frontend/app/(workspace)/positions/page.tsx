@@ -36,25 +36,25 @@ export default async function PositionsPage({
     <PageShell
       group="Portfolio"
       title="Positions"
-      subtitle="按 FIFO 重放得到的当前持仓;市值与未实现盈亏来自最近一次行情快照。"
+      subtitle="Current open positions from FIFO replay. Market value and unrealized P&L come from the latest live snapshot."
       icon={IconBriefcase}
       action={accountId ? <RefreshPricesButton accountId={accountId} /> : null}
     >
       {offline ? (
         <EmptyState
           tone="warn"
-          title="后端离线"
-          hint="无法连接 API。确认 backend 已在 :8000 运行。"
+          title="Backend offline"
+          hint="Cannot reach the API. Make sure the backend is running on :8000."
         />
       ) : !accountId ? (
         <EmptyState
-          title="还没有账户"
-          hint="先到 Upload 页导入一份 IBKR Flex 对账单。"
+          title="No accounts yet"
+          hint="Import an IBKR Flex statement on the Upload page first."
         />
       ) : positions.length === 0 ? (
         <EmptyState
-          title="该账户暂无持仓"
-          hint="导入对账单后,持仓会在这里出现。"
+          title="No open positions for this account"
+          hint="Positions show up here after you import a statement."
         />
       ) : (
         <LivePositionsTable initial={positions} accountId={accountId} />
