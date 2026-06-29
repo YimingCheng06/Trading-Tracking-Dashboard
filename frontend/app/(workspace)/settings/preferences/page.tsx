@@ -7,7 +7,7 @@ export default function SettingsPreferencesPage() {
     <PageShell
       group="Settings"
       title="Preferences"
-      subtitle="实时刷新、显示偏好等用户级设置。"
+      subtitle="Live refresh and display preferences for the workspace."
       icon={IconSliders}
     >
       <LiveDataSettings />

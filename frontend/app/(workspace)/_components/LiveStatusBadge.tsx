@@ -20,14 +20,14 @@ function variantFor(
         ? Math.max(0, Math.floor((nowMs - lastFetchedAt.getTime()) / 1000))
         : 0;
       return {
-        text: `Live · ${ago}s 前`,
+        text: `Live · ${ago}s ago`,
         dotClass: "bg-up",
         textClass: "text-muted-strong",
       };
     }
     case "polling":
       return {
-        text: "Live · 刷新中…",
+        text: "Live · refreshing…",
         dotClass: "bg-up animate-pulse",
         textClass: "text-muted-strong",
       };
@@ -45,14 +45,14 @@ function variantFor(
       };
     case "unavailable":
       return {
-        text: "行情不可用",
+        text: "Quote unavailable",
         dotClass: "bg-down",
         textClass: "text-down",
       };
     case "idle":
     default:
       return {
-        text: "等待中…",
+        text: "Idle…",
         dotClass: "bg-muted",
         textClass: "text-muted",
       };

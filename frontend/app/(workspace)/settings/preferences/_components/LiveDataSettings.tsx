@@ -13,10 +13,10 @@ const INTERVAL_OPTIONS: {
   label: string;
   hint: string;
 }[] = [
-  { value: 30, label: "30s", hint: "反馈最活,Yahoo 调用最频" },
-  { value: 60, label: "60s", hint: "默认" },
-  { value: 120, label: "120s", hint: "省网络" },
-  { value: null, label: "Manual", hint: "不自动刷新" },
+  { value: 30, label: "30s", hint: "Most responsive; most Yahoo calls" },
+  { value: 60, label: "60s", hint: "Default" },
+  { value: 120, label: "120s", hint: "Saves bandwidth" },
+  { value: null, label: "Manual", hint: "No auto-refresh" },
 ];
 
 export function LiveDataSettings() {
@@ -54,7 +54,7 @@ export function LiveDataSettings() {
         Live Data
       </h2>
       <p className="mt-1 text-xs text-muted">
-        控制 /positions 与 /pnl 页面的自动刷新行为。
+        Controls auto-refresh on /positions and /pnl.
       </p>
 
       <fieldset className="mt-6">
@@ -100,14 +100,14 @@ export function LiveDataSettings() {
         <span>
           Include after-hours / pre-market
           <span className="ml-2 text-xs text-muted">
-            (默认关闭。打开后,周一至周五全天轮询;周末始终不轮询)
+            (Off by default. When on, polls Mon–Fri 24h; weekends never poll.)
           </span>
         </span>
       </label>
 
       <div className="mt-6 flex items-center justify-end gap-3">
         {savedNote && (
-          <span className="text-xs text-up">已保存</span>
+          <span className="text-xs text-up">Saved</span>
         )}
         <button
           type="button"
@@ -115,7 +115,7 @@ export function LiveDataSettings() {
           disabled={!dirty}
           className="rounded-xl border border-border bg-surface px-4 py-2 text-sm text-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
-          取消
+          Cancel
         </button>
         <button
           type="button"
@@ -123,7 +123,7 @@ export function LiveDataSettings() {
           disabled={!dirty}
           className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-rail-deep transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          保存
+          Save
         </button>
       </div>
     </section>
