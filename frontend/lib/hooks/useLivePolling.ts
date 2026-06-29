@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getLiveSettings, subscribeLiveSettings } from "../settings";
-import { isUsMarketOpen } from "../market-hours";
+import { isUsMarketOpen, isUsWeekend } from "../market-hours";
 
 export type LivePollStatus =
   | "idle"
@@ -71,10 +71,12 @@ export function useLivePolling<T>({
     const tick = async () => {
       if (cancelled) return;
       if (typeof document !== "undefined" && document.hidden) return;
-      if (
-        !settings.includeAfterHours &&
-        !isUsMarketOpen(new Date())
-      ) {
+      const now = new Date();
+      // Weekends are always closed regardless of the after-hours toggle —
+      // there is no session to track and no Yahoo data fresher than Friday.
+      const closed = isUsWeekend(now) ||
+        (!settings.includeAfterHours && !isUsMarketOpen(now));
+      if (closed) {
         setStatus("market-closed");
         return;
       }
