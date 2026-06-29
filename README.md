@@ -6,6 +6,21 @@ with realtime quotes and a BYOK AI/news layer planned.
 
 **[English](#english) · [中文](#中文)**
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="33%"><strong>Positions</strong> — live polled prices, "Live · Ns ago" / "Market closed" badge</td>
+    <td width="33%"><strong>P&amp;L</strong> — realized summary, equity curve, mode toggle, live tail update</td>
+    <td width="33%"><strong>Settings / Preferences</strong> — polling frequency + after-hours toggle</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/positions.png" alt="Positions page" /></td>
+    <td><img src="docs/images/pnl.png" alt="P&amp;L page" /></td>
+    <td><img src="docs/images/settings-preferences.png" alt="Settings · Preferences page" /></td>
+  </tr>
+</table>
+
 ---
 
 ## English
