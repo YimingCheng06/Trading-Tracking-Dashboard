@@ -1,14 +1,17 @@
 /**
- * US/Eastern market-hours predicates.
+ * US/Eastern session predicates.
  *
- * `isUsMarketOpen` — Mon–Fri 09:30–16:00 ET (regular session).
- * `isUsWeekend` — Sat or Sun in ET (used to gate the after-hours toggle:
- * the toggle only enables polling during weekday extended hours; weekends
- * always show "Market closed" since there is no session to track).
+ * `isUsMarketOpen` — regular session, Mon–Fri 09:30–16:00 ET.
+ * `isUsMarketSessionClosed` — the "no session at all" window when even
+ * extended-hours trading is unavailable: Friday 20:00 ET through
+ * Sunday 20:00 ET. Used to force the badge to "Market closed" regardless
+ * of the after-hours toggle.
  *
- * Uses Intl.DateTimeFormat to convert a UTC Date to ET parts, avoiding
- * a tz library. No US holiday calendar (MVP scope — holidays poll as if
- * open and just return the last close).
+ * Anything not in those two predicates is an extended session (pre-market,
+ * after-hours, or overnight) — only polled when the after-hours toggle is on.
+ *
+ * Uses Intl.DateTimeFormat to convert a UTC Date to ET parts, avoiding a tz
+ * library. No US holiday calendar (MVP scope).
  */
 
 type EtParts = { weekday: string; hour: number; minute: number };
@@ -31,9 +34,15 @@ function etParts(now: Date): EtParts {
   return { weekday, hour, minute };
 }
 
-export function isUsWeekend(now: Date): boolean {
-  const { weekday } = etParts(now);
-  return weekday === "Sat" || weekday === "Sun";
+const WEEKEND_BOUNDARY = 20 * 60; // 20:00 ET — Fri close / Sun overnight open
+
+export function isUsMarketSessionClosed(now: Date): boolean {
+  const { weekday, hour, minute } = etParts(now);
+  const minutes = hour * 60 + minute;
+  if (weekday === "Sat") return true;
+  if (weekday === "Fri" && minutes >= WEEKEND_BOUNDARY) return true;
+  if (weekday === "Sun" && minutes < WEEKEND_BOUNDARY) return true;
+  return false;
 }
 
 export function isUsMarketOpen(now: Date): boolean {

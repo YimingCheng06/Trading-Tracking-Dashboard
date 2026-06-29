@@ -100,7 +100,8 @@ export function LiveDataSettings() {
         <span>
           Include after-hours / pre-market
           <span className="ml-2 text-xs text-muted">
-            (Off by default. When on, polls Mon–Fri 24h; weekends never poll.)
+            (Off by default. When on, polls extended hours too — the
+            weekend window Fri 20:00 ET → Sun 20:00 ET stays closed.)
           </span>
         </span>
       </label>
