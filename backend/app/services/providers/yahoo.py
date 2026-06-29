@@ -46,19 +46,21 @@ def _yfinance_latest_closes(symbols: list[str]) -> dict[str, Decimal]:
         progress=False,
         threads=False,
     )
+    # With group_by="ticker" yfinance ALWAYS returns a MultiIndex column
+    # (ticker, OHLC) even for a single symbol — `frame[s]["Close"]` works for
+    # both 1 and N tickers. Fall back to the flat "Close" column for the
+    # rare yfinance versions that flatten single-ticker responses.
     out: dict[str, Decimal] = {}
-    if len(symbols) == 1:
-        closes = frame["Close"].dropna()
-        if not closes.empty:
-            out[symbols[0]] = Decimal(str(closes.iloc[-1]))
-    else:
-        for s in symbols:
+    for s in symbols:
+        try:
+            closes = frame[s]["Close"].dropna()
+        except (KeyError, AttributeError):
             try:
-                closes = frame[s]["Close"].dropna()
+                closes = frame["Close"].dropna()
             except (KeyError, AttributeError):
                 continue
-            if not closes.empty:
-                out[s] = Decimal(str(closes.iloc[-1]))
+        if not closes.empty:
+            out[s] = Decimal(str(closes.iloc[-1]))
     return out
 
 
