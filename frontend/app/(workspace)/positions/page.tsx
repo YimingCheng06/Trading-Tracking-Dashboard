@@ -1,22 +1,11 @@
 import { api, type Account, type Position } from "@/lib/api";
-import { fmtMoney, fmtNum, pnlClass } from "@/lib/format";
 import { IconBriefcase } from "../_components/icons";
 import { PageShell } from "../_components/PageShell";
-import { DataTable, type Column } from "../_components/DataTable";
 import { EmptyState } from "../_components/EmptyState";
 import { RefreshPricesButton } from "../_components/RefreshPricesButton";
+import { LivePositionsTable } from "./_components/LivePositionsTable";
 
 export const dynamic = "force-dynamic";
-
-const COLUMNS: Column[] = [
-  { key: "symbol", label: "Symbol" },
-  { key: "qty", label: "Qty", numeric: true },
-  { key: "avg", label: "Avg Cost", numeric: true },
-  { key: "cost", label: "Cost Basis", numeric: true },
-  { key: "price", label: "Mkt Price", numeric: true },
-  { key: "value", label: "Mkt Value", numeric: true },
-  { key: "upnl", label: "Unrealized P&L", numeric: true },
-];
 
 export default async function PositionsPage({
   searchParams,
@@ -47,46 +36,28 @@ export default async function PositionsPage({
     <PageShell
       group="Portfolio"
       title="Positions"
-      subtitle="按 FIFO 重放得到的当前持仓;市值与未实现盈亏来自最近一次行情快照。"
+      subtitle="Current open positions from FIFO replay. Market value and unrealized P&L come from the latest live snapshot."
       icon={IconBriefcase}
       action={accountId ? <RefreshPricesButton accountId={accountId} /> : null}
     >
       {offline ? (
         <EmptyState
           tone="warn"
-          title="后端离线"
-          hint="无法连接 API。确认 backend 已在 :8000 运行。"
+          title="Backend offline"
+          hint="Cannot reach the API. Make sure the backend is running on :8000."
         />
       ) : !accountId ? (
         <EmptyState
-          title="还没有账户"
-          hint="先到 Upload 页导入一份 IBKR Flex 对账单。"
+          title="No accounts yet"
+          hint="Import an IBKR Flex statement on the Upload page first."
         />
       ) : positions.length === 0 ? (
         <EmptyState
-          title="该账户暂无持仓"
-          hint="导入对账单后,持仓会在这里出现。"
+          title="No open positions for this account"
+          hint="Positions show up here after you import a statement."
         />
       ) : (
-        <DataTable
-          columns={COLUMNS}
-          rows={positions.map((p) => ({
-            id: p.symbol,
-            cells: [
-              <span key="s" className="font-medium text-foreground">
-                {p.symbol}
-              </span>,
-              fmtNum(p.quantity),
-              fmtMoney(p.average_cost),
-              fmtMoney(p.cost_basis),
-              fmtMoney(p.market_price),
-              fmtMoney(p.market_value),
-              <span key="u" className={pnlClass(p.unrealized_pnl)}>
-                {fmtMoney(p.unrealized_pnl)}
-              </span>,
-            ],
-          }))}
-        />
+        <LivePositionsTable initial={positions} accountId={accountId} />
       )}
     </PageShell>
   );

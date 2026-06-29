@@ -89,6 +89,9 @@ class _FakeProvider(MarketDataProvider):
     def get_latest_close(self, symbol):
         return Decimal("100")
 
+    def get_latest_closes(self, symbols):
+        return {s: Decimal("100") for s in symbols}
+
 
 def test_refresh_prices_builds_snapshots(api_client):
     from app.api.deps import get_market_data_provider
@@ -107,3 +110,96 @@ def test_refresh_prices_builds_snapshots(api_client):
 
 def test_refresh_prices_unknown_account_404(api_client):
     assert api_client.post("/accounts/UNKNOWN/refresh-prices").status_code == 404
+
+
+class _MissingProvider(MarketDataProvider):
+    """Provider whose batch call returns an empty dict — every symbol missing."""
+
+    def get_daily_closes(self, symbol, start, end):
+        return {}
+
+    def get_latest_close(self, symbol):
+        return None
+
+    def get_latest_closes(self, symbols):
+        return {}
+
+
+class _RaisingProvider(MarketDataProvider):
+    """Provider that blows up on the batch call."""
+
+    def get_daily_closes(self, symbol, start, end):
+        return {}
+
+    def get_latest_close(self, symbol):
+        return None
+
+    def get_latest_closes(self, symbols):
+        raise RuntimeError("yahoo down")
+
+
+def _with_provider(provider_factory):
+    """Helper: override the market-data provider dep for the test's duration."""
+    from app.api.deps import get_market_data_provider
+    from app.main import app
+
+    app.dependency_overrides[get_market_data_provider] = provider_factory
+    return get_market_data_provider
+
+
+def test_live_snapshot_returns_overlaid_positions(api_client):
+    _upload(api_client)
+    key = _with_provider(lambda: _FakeProvider())
+    try:
+        response = api_client.get("/accounts/U0000000/live-snapshot")
+    finally:
+        from app.main import app
+        del app.dependency_overrides[key]
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "fetched_at" in body
+    assert "positions" in body
+    assert "curve_tail" in body
+    aapl = next(p for p in body["positions"] if p["symbol"] == "AAPL")
+    # _FakeProvider returns 100 for every symbol — 6 shares left after sell.
+    assert Decimal(str(aapl["market_price"])) == Decimal("100")
+    assert Decimal(str(aapl["market_value"])) == Decimal("600")
+    assert body["curve_tail"]["on_date"] is not None
+
+
+def test_live_snapshot_strict_missing_returns_503(api_client):
+    _upload(api_client)
+    key = _with_provider(lambda: _MissingProvider())
+    try:
+        response = api_client.get("/accounts/U0000000/live-snapshot")
+    finally:
+        from app.main import app
+        del app.dependency_overrides[key]
+
+    assert response.status_code == 503
+    assert "行情不可用" in response.json()["detail"]
+
+
+def test_live_snapshot_provider_exception_returns_503(api_client):
+    _upload(api_client)
+    key = _with_provider(lambda: _RaisingProvider())
+    try:
+        response = api_client.get("/accounts/U0000000/live-snapshot")
+    finally:
+        from app.main import app
+        del app.dependency_overrides[key]
+
+    assert response.status_code == 503
+    assert "行情不可用" in response.json()["detail"]
+
+
+def test_live_snapshot_unknown_account_404(api_client):
+    assert api_client.get("/accounts/UNKNOWN/live-snapshot").status_code == 404
+
+
+def test_live_snapshot_rejects_bad_mode(api_client):
+    _upload(api_client)
+    assert (
+        api_client.get("/accounts/U0000000/live-snapshot?mode=Z").status_code == 422
+    )

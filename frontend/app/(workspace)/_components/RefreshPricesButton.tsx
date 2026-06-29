@@ -24,7 +24,7 @@ export function RefreshPricesButton({ accountId }: { accountId: string }) {
       await api.refreshPrices(accountId);
       startTransition(() => router.refresh());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "刷新失败");
+      setError(e instanceof Error ? e.message : "Refresh failed");
     } finally {
       setBusy(false);
     }
@@ -43,7 +43,7 @@ export function RefreshPricesButton({ accountId }: { accountId: string }) {
           height={16}
           className={loading ? "animate-spin" : ""}
         />
-        {loading ? "刷新中…" : "刷新行情"}
+        {loading ? "Refreshing…" : "Refresh quotes"}
       </button>
       {error && <p className="max-w-xs text-right text-xs text-down">{error}</p>}
     </div>

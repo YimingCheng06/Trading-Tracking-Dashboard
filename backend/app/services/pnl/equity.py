@@ -13,9 +13,10 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.enums import CashFlowType, TradeSide
+from app.db.enums import CashFlowType
 from app.db.models import Account, CashFlow, PositionSnapshot, Trade
 from app.services.pnl.curve import CurvePoint, DayPoint, compute_equity_curve
+from app.services.snapshot.cash import compute_cash_at_from_sequences
 
 
 def _holdings_value(snapshot: PositionSnapshot) -> Decimal:
@@ -38,12 +39,16 @@ def build_day_points(session: Session, account: Account) -> list[DayPoint]:
     snapshots = session.scalars(
         select(PositionSnapshot).where(PositionSnapshot.account_id == account.id)
     ).all()
-    cash_flows = session.scalars(
-        select(CashFlow).where(CashFlow.account_id == account.id)
-    ).all()
-    trades = session.scalars(
-        select(Trade).where(Trade.account_id == account.id)
-    ).all()
+    cash_flows = list(
+        session.scalars(
+            select(CashFlow).where(CashFlow.account_id == account.id)
+        ).all()
+    )
+    trades = list(
+        session.scalars(
+            select(Trade).where(Trade.account_id == account.id)
+        ).all()
+    )
 
     holdings_by_day: dict[date, Decimal] = {}
     for s in snapshots:
@@ -63,19 +68,7 @@ def build_day_points(session: Session, account: Account) -> list[DayPoint]:
     for day in sorted(days):
         if day in holdings_by_day:
             holdings = holdings_by_day[day]
-        cash = Decimal("0")
-        for cf in cash_flows:
-            if cf.occurred_at.date() <= day:
-                cash += cf.amount_usd
-        for t in trades:
-            if t.executed_at.date() <= day:
-                # proceeds_usd is stored as a gross magnitude; abs() keeps the
-                # cash impact correct whatever sign convention produced it.
-                gross = abs(t.proceeds_usd)
-                if t.side == TradeSide.BUY:
-                    cash -= gross + t.commission_usd
-                else:
-                    cash += gross - t.commission_usd
+        cash = compute_cash_at_from_sequences(cash_flows, trades, day)
         net_flow = Decimal("0")
         for cf in cash_flows:
             if cf.occurred_at.date() == day and cf.flow_type in (

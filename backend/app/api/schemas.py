@@ -67,3 +67,9 @@ class CurvePointOut(BaseModel):
 class RefreshResultOut(BaseModel):
     broker_account_id: str
     snapshot_rows: int
+
+
+class LiveSnapshotOut(BaseModel):
+    fetched_at: datetime
+    positions: list[PositionOut]
+    curve_tail: CurvePointOut

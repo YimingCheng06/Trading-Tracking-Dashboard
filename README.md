@@ -6,6 +6,21 @@ with realtime quotes and a BYOK AI/news layer planned.
 
 **[English](#english) · [中文](#中文)**
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="33%"><strong>Positions</strong> — live polled prices, "Live · Ns ago" / "Market closed" badge</td>
+    <td width="33%"><strong>P&amp;L</strong> — realized summary, equity curve, mode toggle, live tail update</td>
+    <td width="33%"><strong>Settings / Preferences</strong> — polling frequency + after-hours toggle</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/positions.png" alt="Positions page" /></td>
+    <td><img src="docs/images/pnl.png" alt="P&amp;L page" /></td>
+    <td><img src="docs/images/settings-preferences.png" alt="Settings · Preferences page" /></td>
+  </tr>
+</table>
+
 ---
 
 ## English
@@ -104,9 +119,14 @@ Analysis / Intelligence / Settings.
 - **M9** — frontend pages: `/upload`, `/positions`, `/trades`, `/pnl`
   (Recharts equity curve), DB-driven account rail
 
-#### 🔜 Phase 2 — Realtime data
-IBKR Client Portal / realtime adapter (locked fallback chain), Yahoo Finance
-fallback quotes, live order status.
+#### 🚧 Phase 2 — Realtime data (Milestone A done)
+- **Milestone A** ✅ — Yahoo polling on `/positions` and `/pnl` (default 60s,
+  configurable in `/settings/preferences`); pauses outside US market hours;
+  `GET /accounts/{id}/live-snapshot` umbrella endpoint with strict failure
+  semantics. Settings stored client-side in `localStorage`.
+- **Milestone B** 🔜 — IBKR Client Portal real-time quotes + positions +
+  order status (locked fallback chain `IBKRRealtime > IBKRClientPortal >
+  IBKRFlexQuery > YahooFinance`).
 
 #### 🔜 Phase 3 — Intelligence layer
 BYOK AI tool layer (MCP server + OpenAI function spec), BYOK news providers
@@ -211,9 +231,12 @@ tooltip)。Portfolio / Activity / Analysis / Intelligence / Settings 共 14 个�
 - **M9** —— 前端页面:`/upload`、`/positions`、`/trades`、`/pnl`
   (Recharts 净值曲线)、账户栏 DB 驱动
 
-#### 🔜 Phase 2 —— 实时数据
-IBKR Client Portal / 实时 adapter(按锁定的 fallback 链)、Yahoo Finance 兜底
-报价、实时订单状态。
+#### 🚧 Phase 2 —— 实时数据(Milestone A 已完成)
+- **Milestone A** ✅ —— `/positions` 与 `/pnl` 接 Yahoo 自动轮询(默认 60s,
+  `/settings/preferences` 可调);盘外暂停;后端 `GET /accounts/{id}/live-snapshot`
+  伞形接口,strict 失败语义。Settings 存浏览器 `localStorage`。
+- **Milestone B** 🔜 —— IBKR Client Portal 实时行情 + 持仓 + 订单状态
+  (锁定回退链 `IBKRRealtime > IBKRClientPortal > IBKRFlexQuery > YahooFinance`)。
 
 #### 🔜 Phase 3 —— 情报层
 BYOK AI 工具层(MCP Server + OpenAI function spec)、BYOK 新闻 provider

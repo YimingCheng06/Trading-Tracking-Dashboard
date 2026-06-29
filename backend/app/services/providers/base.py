@@ -23,3 +23,11 @@ class MarketDataProvider(ABC):
     @abstractmethod
     def get_latest_close(self, symbol: str) -> Decimal | None:
         """The most recent close price, or None if unavailable."""
+
+    @abstractmethod
+    def get_latest_closes(self, symbols: list[str]) -> dict[str, Decimal]:
+        """Latest close price for each symbol — one batch call.
+
+        Symbols with no available data are simply absent from the result;
+        the caller decides whether that is fatal.
+        """

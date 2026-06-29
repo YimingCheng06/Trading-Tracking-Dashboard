@@ -69,6 +69,18 @@ export type RefreshResult = {
   snapshot_rows: number;
 };
 
+export type CurveTail = {
+  on_date: string;
+  cumulative_pnl: Num;
+  pct: Num | null;
+};
+
+export type LiveSnapshot = {
+  fetched_at: string;
+  positions: Position[];
+  curve_tail: CurveTail;
+};
+
 export type CurveMode = "A" | "B";
 
 async function readError(res: Response, path: string): Promise<never> {
@@ -128,6 +140,10 @@ export const api = {
   refreshPrices: (id: string) =>
     apiPost<RefreshResult>(
       `/accounts/${encodeURIComponent(id)}/refresh-prices`,
+    ),
+  liveSnapshot: (id: string, mode: CurveMode = "B") =>
+    apiGet<LiveSnapshot>(
+      `/accounts/${encodeURIComponent(id)}/live-snapshot?mode=${mode}`,
     ),
   uploadStatement: (file: File) => {
     const form = new FormData();

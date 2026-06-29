@@ -5,7 +5,7 @@ import type { CurveMode } from "@/lib/api";
 
 const MODES: { value: CurveMode; label: string }[] = [
   { value: "A", label: "Mode A · TWR" },
-  { value: "B", label: "Mode B · 净入金" },
+  { value: "B", label: "Mode B · Net deposits" },
 ];
 
 /**
