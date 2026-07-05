@@ -61,6 +61,7 @@ class IBKRClientPortalClient:
             res.raise_for_status()
             return bool(res.json().get("authenticated"))
         except Exception:
+            logger.debug("Gateway auth probe failed; treating as offline", exc_info=True)
             return False
 
     def ensure_primed(self) -> None:
