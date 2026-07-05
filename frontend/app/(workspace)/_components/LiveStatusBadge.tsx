@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { LivePollStatus } from "@/lib/hooks/useLivePolling";
+import type { LiveSource } from "@/lib/api";
 
 type Variant = {
   text: string;
@@ -9,8 +10,14 @@ type Variant = {
   textClass: string;
 };
 
+const SOURCE_LABEL: Record<LiveSource, string> = {
+  ibkr: "IBKR",
+  yahoo: "Yahoo (delayed)",
+};
+
 function variantFor(
   status: LivePollStatus,
+  source: LiveSource | null,
   lastFetchedAt: Date | null,
   nowMs: number,
 ): Variant {
@@ -19,8 +26,9 @@ function variantFor(
       const ago = lastFetchedAt
         ? Math.max(0, Math.floor((nowMs - lastFetchedAt.getTime()) / 1000))
         : 0;
+      const label = source ? ` · ${SOURCE_LABEL[source]}` : "";
       return {
-        text: `Live · ${ago}s ago`,
+        text: `Live${label} · ${ago}s ago`,
         dotClass: "bg-up",
         textClass: "text-muted-strong",
       };
@@ -65,9 +73,11 @@ function variantFor(
 export function LiveStatusBadge({
   status,
   lastFetchedAt,
+  source = null,
 }: {
   status: LivePollStatus;
   lastFetchedAt: Date | null;
+  source?: LiveSource | null;
 }) {
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -77,7 +87,7 @@ export function LiveStatusBadge({
     return () => window.clearInterval(id);
   }, [status]);
 
-  const v = variantFor(status, lastFetchedAt, nowMs);
+  const v = variantFor(status, source, lastFetchedAt, nowMs);
 
   return (
     <span

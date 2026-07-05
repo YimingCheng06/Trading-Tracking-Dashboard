@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { api, type CurveMode, type CurvePoint, type CurveTail } from "@/lib/api";
+import {
+  api,
+  type CurveMode,
+  type CurvePoint,
+  type CurveTail,
+  type LiveSource,
+} from "@/lib/api";
 import { fmtPct, pnlClass } from "@/lib/format";
 import { useLivePolling } from "@/lib/hooks/useLivePolling";
 import { EquityCurve } from "../../_components/EquityCurve";
@@ -35,11 +41,13 @@ export function LivePnlTail({
   mode: CurveMode;
 }) {
   const [curve, setCurve] = useState<CurvePoint[]>(initial);
+  const [source, setSource] = useState<LiveSource | null>(null);
 
   const { status, lastFetchedAt, reportFetchedAt } = useLivePolling({
     fetcher: () => api.liveSnapshot(accountId, mode),
     onData: (snap) => {
       setCurve((prev) => applyTail(prev, snap.curve_tail));
+      setSource(snap.source);
       reportFetchedAt(new Date(snap.fetched_at));
     },
   });
@@ -62,7 +70,7 @@ export function LivePnlTail({
           )}
         </div>
         <div className="flex items-center gap-3">
-          <LiveStatusBadge status={status} lastFetchedAt={lastFetchedAt} />
+          <LiveStatusBadge status={status} lastFetchedAt={lastFetchedAt} source={source} />
           <CurveModeToggle mode={mode} />
         </div>
       </div>

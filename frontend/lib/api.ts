@@ -75,10 +75,13 @@ export type CurveTail = {
   pct: Num | null;
 };
 
+export type LiveSource = "ibkr" | "yahoo";
+
 export type LiveSnapshot = {
   fetched_at: string;
   positions: Position[];
   curve_tail: CurveTail;
+  source: LiveSource;
 };
 
 export type CurveMode = "A" | "B";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { api, type Position } from "@/lib/api";
+import { api, type LiveSource, type Position } from "@/lib/api";
 import { fmtMoney, fmtNum, pnlClass } from "@/lib/format";
 import { useLivePolling } from "@/lib/hooks/useLivePolling";
 import {
@@ -28,11 +28,13 @@ export function LivePositionsTable({
   accountId: string;
 }) {
   const [positions, setPositions] = useState<Position[]>(initial);
+  const [source, setSource] = useState<LiveSource | null>(null);
 
   const { status, lastFetchedAt, reportFetchedAt } = useLivePolling({
     fetcher: () => api.liveSnapshot(accountId, "B"),
     onData: (snap) => {
       setPositions(snap.positions);
+      setSource(snap.source);
       reportFetchedAt(new Date(snap.fetched_at));
     },
   });
@@ -40,7 +42,7 @@ export function LivePositionsTable({
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <LiveStatusBadge status={status} lastFetchedAt={lastFetchedAt} />
+        <LiveStatusBadge status={status} lastFetchedAt={lastFetchedAt} source={source} />
       </div>
       <DataTable
         columns={COLUMNS}
