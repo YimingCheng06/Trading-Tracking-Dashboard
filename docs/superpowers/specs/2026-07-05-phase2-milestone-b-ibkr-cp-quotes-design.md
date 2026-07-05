@@ -65,6 +65,11 @@
    `ibkr_gateway_url` 关闭 verify。仅 localhost 流量,可接受。
 8. **conid 缓存 = 进程内 dict,无过期**。conid 是 IBKR 的永久合约 ID,不会变;
    后端重启即清空,足够。
+9. **conid 来源 = DB 优先**(实现前勘察加入):Flex 导入的 instrument 自带
+   conid,直接读 `Instrument.conid`;股票缺失才走 search API,期权缺失直接
+   成本计。期权的两步 secdef 查询链路整个砍掉。
+10. **顺手修 Milestone A live 尾点漏计期权成本价值的 bug**(见 live.py 组件节)。
+    离线回落路径的"现状行为"指修复后的口径:期权始终按成本进尾点。
 
 ## 技术约束(CP Gateway API)
 
@@ -76,13 +81,14 @@
   (~2s),不拖慢回落路径。
 - **会话预热**:每个后端进程生命周期内,首次用 snapshot 前调一次
   `GET /iserver/accounts`(IBKR 已知怪癖:不预热则 snapshot 返回空)。
-- **股票 conid**:`GET /iserver/secdef/search?symbol=AAPL` → 取 `secType=STK`
-  且美国上市的第一条的 `conid`。
-- **期权 conid(两步)**:
-  1. search 标的 symbol → 标的 conid;
-  2. `GET /iserver/secdef/info?conid=<标的conid>&sectype=OPT&month=<MMMYY>&strike=<x>&right=<C|P>`
-     → 匹配到期日的合约 `conid`。月份格式如 `JAN26`,由 instrument 的
-     expiry 字段推导。
+- **conid 来源 = DB 优先**(实现前勘察发现的简化):IBKR Flex 导入的每个
+  instrument(股票和期权)本来就带 IBKR `Conid` 列,已存进 `Instrument.conid`。
+  所以 conid 解析**首选直接读 DB 字段**:
+  - 股票/ETF:DB conid 缺失时(如公司行动建的 stub instrument)才退回
+    `GET /iserver/secdef/search?symbol=X` → 取 `secType=STK` 第一条,结果
+    进程内缓存;仍解析不到 → 该 symbol 走 Yahoo 补洞。
+  - 期权:**只用 DB conid**(Flex 导入的期权必带 conid);缺失则该期权按
+    成本计,不走 search(期权两步查询链路整个砍掉,YAGNI)。
 - **快照取价**:`GET /iserver/marketdata/snapshot?conids=...&fields=31,7635`。
   字段 31 = last price,7635 = mark price。首次调用可能返回不含价格字段的
   部分响应 → 自动重试一次。价格值可能带状态前缀字母(如 `C` 前收、`H` 停牌)
@@ -103,28 +109,34 @@ Browser(不变: useLivePolling → api.liveSnapshot)
 Backend  live-snapshot endpoint
    │
    ▼
-ChainedMarketDataProvider
+compute_live_snapshot(session, account, provider, mode)
+   │  从 instruments 组装: equity = {symbol: conid|None}(股票/ETF)
+   │                       options = {symbol: conid}(期权,DB conid 非空)
+   ▼
+ChainedMarketDataProvider.get_live_quotes(equity, options)
    ├─ ibkr.auth_ok()?  ── POST /iserver/auth/status (timeout 2s)
    │
-   ├─ 在线(authenticated):
-   │    equity_closes = ibkr.get_latest_closes(symbols)     # conid 解析+缓存 → snapshot
+   ├─ 在线(authenticated),IBKR 段任何异常 → 落到离线分支:
+   │    symbol_conids = resolve_equity_conids(equity)   # DB conid 直用,缺的 search
+   │    closes = ibkr.get_equity_closes(symbol_conids)  # snapshot 字段 31
    │    缺的 symbol → yahoo.get_latest_closes(missing) 补洞
-   │    补完仍缺 → 503(strict, 同 Milestone A)
-   │    option_marks = ibkr.get_option_marks(option_specs)  # 两步 conid → mark
+   │    option_marks = ibkr.get_option_marks(options)   # 字段 7635 优先, 31 兜底
    │    单个期权缺 mark → 该期权不进 option_marks(成本计)
    │    source = "ibkr"
    │
    └─ 离线:
-        equity_closes = yahoo.get_latest_closes(symbols)    # 现状,一字不变
-        option_marks = {}                                    # 期权成本计
+        closes = yahoo.get_latest_closes(equity 的 symbols)  # 现状,一字不变
+        option_marks = {}                                     # 期权成本计
         source = "yahoo"
    │
    ▼
-compute_live_snapshot(..., closes, option_marks, source)
-   ├─ 股票/ETF: overlay closes(现状)
-   ├─ 期权: spec 在 option_marks 里 → market_value = mark × qty × multiplier,
-   │        unrealized = market_value − cost_basis;不在 → 按成本(现状)
-   └─ 曲线尾点: live_holdings 含期权实时市值(在线时)
+compute_live_snapshot 续:
+   ├─ 股票/ETF: overlay closes;补洞后仍缺 → 503(strict, 同 Milestone A)
+   ├─ 期权: symbol 在 option_marks → market_price = mark,
+   │        market_value = mark × qty × multiplier,
+   │        unrealized = market_value − cost_basis;
+   │        不在 → market_* = None(展示同现状),尾点按 cost_basis 计入
+   └─ 曲线尾点: live_holdings = 股票/ETF 实时市值 + 期权(mark 市值 或 cost_basis)
    │
    ▼
 LiveSnapshot 响应 { source, positions, curve_tail }
@@ -143,37 +155,48 @@ LiveStatusBadge:  source=="ibkr" → "Live · IBKR"
   - `auth_ok() -> bool` —— `/iserver/auth/status`,任何异常/超时/未认证 → False
   - `ensure_primed() -> None` —— 首次调用前打一次 `/iserver/accounts`(进程内标记)
   - `search_stock_conid(symbol) -> int | None`
-  - `resolve_option_conid(underlying, expiry, strike, right) -> int | None`
   - `snapshot(conids, fields) -> dict[int, dict[str, str]]` —— 含一次自动重试
-- `IBKRClientPortalProvider(MarketDataProvider)`:
-  - `get_latest_closes(symbols) -> dict[str, Decimal]` —— conid 解析(带缓存)
-    → snapshot(字段 31)→ 剥前缀转 Decimal;解析不到 conid 或无价的 symbol
-    缺席于结果(caller 决定是否致命,同 Yahoo 契约)
-  - `get_option_marks(specs) -> dict[key, Decimal]` —— spec = (underlying,
-    expiry, strike, right);mark(7635)优先,缺退 last(31),再缺则缺席
-  - `get_daily_closes` / `get_latest_close` —— `NotImplementedError`(历史
-    永远走 Yahoo,链式层保证不会调到)
+- `IBKRClientPortalProvider`(普通类,**不**继承 `MarketDataProvider` ——
+  它不满足历史接口契约,只作为链式层的内部件):
+  - `get_equity_closes(symbol_conids: dict[str, int]) -> dict[str, Decimal]`
+    —— snapshot(字段 31)→ 剥前缀转 Decimal;无价的 symbol 缺席于结果
+  - `resolve_equity_conids(equity: dict[str, int | None]) -> dict[str, int]`
+    —— DB conid 直用;None 的走 search(带进程内缓存);解析不到的缺席
+  - `get_option_marks(symbol_conids: dict[str, int]) -> dict[str, Decimal]`
+    —— snapshot(字段 7635, 31);mark(7635)优先,缺退 last(31),再缺则缺席
 
-**`ChainedMarketDataProvider`(新,同文件或 `chain.py`)**
+**`ChainedMarketDataProvider(MarketDataProvider)`(新,`chain.py`)**
 
 - 构造:`(ibkr: IBKRClientPortalProvider, yahoo: YahooFinanceProvider)`
-- `get_live_quotes(symbols, option_specs) -> LiveQuotes(closes, option_marks, source)`
-  —— live-snapshot 专用的聚合入口,内部实现上文数据流
-- `get_daily_closes` 等历史方法直接转发 Yahoo(`refresh-prices` 路径无感)
+- `get_live_quotes(equity, options) -> LiveQuotes(closes, option_marks, source)`
+  —— live-snapshot 专用聚合入口;`equity: dict[symbol, conid|None]`、
+  `options: dict[symbol, conid]`。IBKR 段任何异常 → 整体回落 Yahoo 路径
+  (Gateway 在 auth 探测后、snapshot 前掉线的窗口)。
+- `get_live_quotes` 在 `MarketDataProvider` 基类上有默认实现
+  (`get_latest_closes` + 空 option_marks + `source="yahoo"`),所以现有测试
+  的 fake provider 不用改;链式层覆写它。
+- `get_daily_closes` / `get_latest_close` / `get_latest_closes` 直接转发
+  Yahoo(`refresh-prices` 路径无感)。
 
 **`app/services/snapshot/live.py`(改)**
 
-- `compute_live_snapshot` 增加 `option_marks` 入参(默认空 dict = 现状行为)。
-  期权 position 的 key 能匹配到 mark 时,market_value / unrealized_pnl /
-  当日曲线尾点的 holdings 用实时值;否则按成本(现状)。
+- `compute_live_snapshot` 改调 `provider.get_live_quotes(equity, options)`
+  (从 instruments 组装两个 dict:股票/ETF 全进 equity,期权带 conid 的进
+  options)。期权 symbol 能匹配到 mark 时,market_value / unrealized_pnl 用
+  `mark × qty × multiplier` 算;否则按成本。
+- **顺手修 Milestone A 的尾点 bug**:历史日点(`build_day_points`)里期权按
+  成本计入组合价值,但 live 尾点的 `live_holdings_usd` 此前只加股票/ETF ——
+  期权价值在 live 尾点凭空消失,今天的点会比昨天低一块。修正:期权无 mark 时
+  按 `cost_basis` 计入尾点(与历史日点口径一致),有 mark 时按实时市值计入。
+- 响应 dataclass `LiveSnapshot` 加 `source` 字段。
 
 **`app/api/`(改)**
 
 - `deps.py`:`get_market_data_provider` 改为构造 `ChainedMarketDataProvider`
   (读 `settings.ibkr_gateway_url`)。
-- `accounts.py`:live-snapshot 端点从 `provider.get_latest_closes(symbols)`
-  改为 `provider.get_live_quotes(symbols, option_specs)`,把返回的
-  `option_marks` 传给 `compute_live_snapshot`、`source` 写进响应。
+- `accounts.py`:live-snapshot 端点本身不变(仍只调 `compute_live_snapshot`,
+  组装 equity/options 与调 `get_live_quotes` 都在 live.py 内),只把
+  `snap.source` 写进响应。
 - `schemas.py`:`LiveSnapshotOut` 加 `source: Literal["ibkr", "yahoo"]`。
 
 **`app/core/config.py`(改)**
