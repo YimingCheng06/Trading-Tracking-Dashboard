@@ -122,3 +122,66 @@ class IBKRClientPortalClient:
                 continue
             rows[int(conid)] = {k: str(v) for k, v in row.items() if k in fields}
         return rows
+
+
+class IBKRClientPortalProvider:
+    """Live quotes from the CP Gateway.
+
+    Deliberately NOT a MarketDataProvider — it cannot serve history, so it
+    only exists as the IBKR leg inside ChainedMarketDataProvider.
+    """
+
+    def __init__(self, client: IBKRClientPortalClient | None = None) -> None:
+        self._client = client or IBKRClientPortalClient()
+        # symbol -> conid search results; conids never change, no expiry.
+        self._search_cache: dict[str, int | None] = {}
+
+    def available(self) -> bool:
+        return self._client.auth_ok()
+
+    def resolve_equity_conids(
+        self, equity: dict[str, int | None]
+    ) -> dict[str, int]:
+        """DB conids pass through; the rest go through cached secdef search."""
+        resolved: dict[str, int] = {}
+        for symbol, conid in equity.items():
+            if conid is None:
+                if symbol not in self._search_cache:
+                    self._search_cache[symbol] = (
+                        self._client.search_stock_conid(symbol)
+                    )
+                conid = self._search_cache[symbol]
+            if conid is not None:
+                resolved[symbol] = conid
+        return resolved
+
+    def get_equity_closes(
+        self, symbol_conids: dict[str, int]
+    ) -> dict[str, Decimal]:
+        if not symbol_conids:
+            return {}
+        rows = self._client.snapshot(list(symbol_conids.values()), [FIELD_LAST])
+        closes: dict[str, Decimal] = {}
+        for symbol, conid in symbol_conids.items():
+            price = parse_price(rows.get(conid, {}).get(FIELD_LAST))
+            if price is not None:
+                closes[symbol] = price
+        return closes
+
+    def get_option_marks(
+        self, symbol_conids: dict[str, int]
+    ) -> dict[str, Decimal]:
+        if not symbol_conids:
+            return {}
+        rows = self._client.snapshot(
+            list(symbol_conids.values()), [FIELD_MARK, FIELD_LAST]
+        )
+        marks: dict[str, Decimal] = {}
+        for symbol, conid in symbol_conids.items():
+            row = rows.get(conid, {})
+            price = parse_price(row.get(FIELD_MARK))
+            if price is None:
+                price = parse_price(row.get(FIELD_LAST))
+            if price is not None:
+                marks[symbol] = price
+        return marks
