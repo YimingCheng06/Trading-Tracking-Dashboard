@@ -182,4 +182,5 @@ def get_live_snapshot(
             cumulative_pnl=snap.curve_tail.cumulative_pnl,
             pct=snap.curve_tail.pct,
         ),
+        source=snap.source,
     )

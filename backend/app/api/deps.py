@@ -10,6 +10,8 @@ from app.core.config import settings
 from app.db.base import get_db
 from app.db.models import Account
 from app.services.providers.base import MarketDataProvider
+from app.services.providers.chain import ChainedMarketDataProvider
+from app.services.providers.ibkr_cp import IBKRClientPortalProvider
 from app.services.providers.yahoo import YahooFinanceProvider
 
 
@@ -32,4 +34,6 @@ def get_account(account_id: str, db: Session = Depends(get_db)) -> Account:
 
 def get_market_data_provider() -> MarketDataProvider:
     """The market-data provider — overridable in tests with a fake."""
-    return YahooFinanceProvider()
+    return ChainedMarketDataProvider(
+        ibkr=IBKRClientPortalProvider(), yahoo=YahooFinanceProvider()
+    )

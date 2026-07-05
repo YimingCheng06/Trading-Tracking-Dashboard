@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -73,3 +74,4 @@ class LiveSnapshotOut(BaseModel):
     fetched_at: datetime
     positions: list[PositionOut]
     curve_tail: CurvePointOut
+    source: Literal["ibkr", "yahoo"]

@@ -203,3 +203,17 @@ def test_live_snapshot_rejects_bad_mode(api_client):
     assert (
         api_client.get("/accounts/U0000000/live-snapshot?mode=Z").status_code == 422
     )
+
+
+def test_live_snapshot_reports_source(api_client):
+    _upload(api_client)
+    key = _with_provider(lambda: _FakeProvider())
+    try:
+        response = api_client.get("/accounts/U0000000/live-snapshot")
+    finally:
+        from app.main import app
+
+        del app.dependency_overrides[key]
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "yahoo"
