@@ -1,4 +1,4 @@
-.PHONY: help install install-backend install-frontend dev dev-backend dev-frontend test lint clean
+.PHONY: help install install-backend install-frontend dev dev-backend dev-frontend test lint clean gateway
 
 UV := $(HOME)/.local/bin/uv
 
@@ -9,6 +9,7 @@ help:
 	@echo "  make dev             run backend (:8000) + frontend (:3000)"
 	@echo "  make dev-backend     backend only"
 	@echo "  make dev-frontend    frontend only"
+	@echo "  make gateway         run IBKR Client Portal Gateway (:5000)"
 	@echo "  make test            run backend tests"
 	@echo "  make lint            run ruff + eslint"
 	@echo "  make clean           remove build artifacts"
@@ -33,6 +34,17 @@ dev-backend:
 
 dev-frontend:
 	cd frontend && npm run dev
+
+gateway:
+	@if [ ! -d gateway/clientportal.gw ]; then \
+	  echo "IBKR Client Portal Gateway not found at gateway/clientportal.gw"; \
+	  echo ""; \
+	  echo "  1. Download: https://download2.interactivebrokers.com/portal/clientportal.gw.zip"; \
+	  echo "  2. Unzip so that gateway/clientportal.gw/bin/run.sh exists"; \
+	  echo "  3. Re-run: make gateway"; \
+	  exit 1; \
+	fi
+	cd gateway/clientportal.gw && sh bin/run.sh root/conf.yaml
 
 test:
 	cd backend && $(UV) run --no-sync pytest

@@ -68,6 +68,22 @@ make test             # pytest (backend)
 make lint             # ruff (backend) + eslint (frontend)
 ```
 
+### IBKR Client Portal Gateway (optional, realtime quotes)
+
+Live polling upgrades from delayed Yahoo data to realtime IBKR quotes when
+the IBKR Client Portal Gateway is running and logged in (requires Java 8+):
+
+1. Download the [Client Portal Gateway](https://download2.interactivebrokers.com/portal/clientportal.gw.zip)
+   and unzip it so that `gateway/clientportal.gw/bin/run.sh` exists.
+2. `make gateway` — starts it on `https://localhost:5000`.
+3. Open `https://localhost:5000` in a browser (accept the self-signed
+   certificate) and log in with your IBKR credentials + 2FA.
+
+The `/positions` and `/pnl` badges show the active source: `Live · IBKR`
+(realtime, options priced at IBKR mark) or `Live · Yahoo (delayed)`
+(fallback whenever the Gateway is down or logged out — options fall back
+to cost). No configuration needed; the fallback is automatic.
+
 ### Project layout
 
 ```
@@ -180,6 +196,20 @@ make dev-frontend     # 仅前端
 make test             # pytest(后端)
 make lint             # ruff(后端)+ eslint(前端)
 ```
+
+### IBKR Client Portal Gateway(可选,实时行情)
+
+跑起并登录 IBKR Client Portal Gateway 后,轮询数据自动从 Yahoo 延迟价升级为
+IBKR 实时价(需要 Java 8+):
+
+1. 下载 [Client Portal Gateway](https://download2.interactivebrokers.com/portal/clientportal.gw.zip),
+   解压到仓库根目录使 `gateway/clientportal.gw/bin/run.sh` 存在。
+2. `make gateway` —— 启动在 `https://localhost:5000`。
+3. 浏览器访问 `https://localhost:5000`(接受自签名证书),用 IBKR 账号 + 2FA 登录。
+
+`/positions` 与 `/pnl` 的徽章会显示当前数据源:`Live · IBKR`(实时,期权按
+IBKR mark 计价)或 `Live · Yahoo (delayed)`(Gateway 掉线/未登录时自动回落,
+期权回落成本计价)。无需任何配置,回退全自动。
 
 ### 目录结构
 
