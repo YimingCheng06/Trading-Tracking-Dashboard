@@ -135,14 +135,16 @@ Analysis / Intelligence / Settings.
 - **M9** — frontend pages: `/upload`, `/positions`, `/trades`, `/pnl`
   (Recharts equity curve), DB-driven account rail
 
-#### 🚧 Phase 2 — Realtime data (Milestone A done)
+#### 🚧 Phase 2 — Realtime data (Milestones A & B done)
 - **Milestone A** ✅ — Yahoo polling on `/positions` and `/pnl` (default 60s,
   configurable in `/settings/preferences`); pauses outside US market hours;
   `GET /accounts/{id}/live-snapshot` umbrella endpoint with strict failure
   semantics. Settings stored client-side in `localStorage`.
-- **Milestone B** 🔜 — IBKR Client Portal real-time quotes + positions +
-  order status (locked fallback chain `IBKRRealtime > IBKRClientPortal >
-  IBKRFlexQuery > YahooFinance`).
+- **Milestone B** ✅ — IBKR Client Portal realtime quotes: chained provider
+  (`IBKR CP > Yahoo`) behind `live-snapshot`, options priced at IBKR mark
+  when the Gateway is up, silent fallback to delayed Yahoo otherwise;
+  badge shows the active source. Positions reconciliation & order status
+  deferred to later milestones.
 
 #### 🔜 Phase 3 — Intelligence layer
 BYOK AI tool layer (MCP server + OpenAI function spec), BYOK news providers
@@ -261,12 +263,14 @@ tooltip)。Portfolio / Activity / Analysis / Intelligence / Settings 共 14 个�
 - **M9** —— 前端页面:`/upload`、`/positions`、`/trades`、`/pnl`
   (Recharts 净值曲线)、账户栏 DB 驱动
 
-#### 🚧 Phase 2 —— 实时数据(Milestone A 已完成)
+#### 🚧 Phase 2 —— 实时数据(Milestone A、B 已完成)
 - **Milestone A** ✅ —— `/positions` 与 `/pnl` 接 Yahoo 自动轮询(默认 60s,
   `/settings/preferences` 可调);盘外暂停;后端 `GET /accounts/{id}/live-snapshot`
   伞形接口,strict 失败语义。Settings 存浏览器 `localStorage`。
-- **Milestone B** 🔜 —— IBKR Client Portal 实时行情 + 持仓 + 订单状态
-  (锁定回退链 `IBKRRealtime > IBKRClientPortal > IBKRFlexQuery > YahooFinance`)。
+- **Milestone B** ✅ —— IBKR Client Portal 实时报价:live-snapshot 后面挂
+  链式 provider(`IBKR CP > Yahoo`),Gateway 在线时期权按 IBKR mark 实时
+  计价,掉线静默回落 Yahoo 延迟价;徽章显示当前数据源。持仓对账与订单状态
+  留给后续里程碑。
 
 #### 🔜 Phase 3 —— 情报层
 BYOK AI 工具层(MCP Server + OpenAI function spec)、BYOK 新闻 provider
