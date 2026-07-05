@@ -3,9 +3,9 @@ from decimal import Decimal
 
 import pytest
 
-from app.db.enums import AssetClass, CashFlowType, TradeSide
+from app.db.enums import AssetClass, CashFlowType, OptionType, TradeSide
 from app.db.models import CashFlow, Instrument, PositionSnapshot, Trade
-from app.services.providers.base import MarketDataProvider
+from app.services.providers.base import LiveQuotes, MarketDataProvider
 from app.services.snapshot.live import (
     LiveDataUnavailable,
     compute_live_snapshot,
@@ -217,3 +217,113 @@ def test_compute_live_snapshot_replaces_today_when_present(
     # portfolio = 1100 ; cumulative_pnl = 1100 - 1000 = 100
     assert snap.curve_tail.on_date == today
     assert snap.curve_tail.cumulative_pnl == Decimal("100")
+
+
+class _FakeChain(MarketDataProvider):
+    """Provider that answers get_live_quotes like the chained provider would."""
+
+    def __init__(self, quotes: LiveQuotes):
+        self._quotes = quotes
+        self.seen_equity: dict[str, int | None] | None = None
+        self.seen_options: dict[str, int] | None = None
+
+    def get_daily_closes(self, symbol, start, end):
+        raise NotImplementedError
+
+    def get_latest_close(self, symbol):
+        raise NotImplementedError
+
+    def get_latest_closes(self, symbols):
+        raise NotImplementedError
+
+    def get_live_quotes(self, equity, options):
+        self.seen_equity = dict(equity)
+        self.seen_options = dict(options)
+        return self._quotes
+
+
+def _option_instrument(db_session, conid="9999777"):
+    inst = Instrument(
+        symbol="AAPL  260116C00150000",
+        asset_class=AssetClass.OPTION,
+        currency="USD",
+        conid=conid,
+        underlying_symbol="AAPL",
+        option_type=OptionType.CALL,
+        strike=Decimal("150"),
+        expiry=date(2026, 1, 16),
+        multiplier=100,
+    )
+    db_session.add(inst)
+    db_session.commit()
+    db_session.refresh(inst)
+    return inst
+
+
+def test_live_snapshot_option_priced_with_ibkr_mark(db_session, account, instrument):
+    option = _option_instrument(db_session)
+    db_session.add(_deposit(account, "10000", datetime(2026, 1, 1, 9)))
+    db_session.add(_buy(account, instrument, 10, "1000", datetime(2026, 1, 2, 10), "B1"))
+    # Buy 2 option contracts for 800 total cost.
+    db_session.add(_buy(account, option, 2, "800", datetime(2026, 1, 3, 10), "B2"))
+    db_session.commit()
+    provider = _FakeChain(
+        LiveQuotes(
+            closes={"AAPL": Decimal("120")},
+            option_marks={"AAPL  260116C00150000": Decimal("4.35")},
+            source="ibkr",
+        )
+    )
+
+    snap = compute_live_snapshot(db_session, account, provider, "B")
+
+    assert snap.source == "ibkr"
+    by_symbol = {p.symbol: p for p in snap.positions}
+    opt = by_symbol["AAPL  260116C00150000"]
+    assert opt.market_price == Decimal("4.35")
+    assert opt.market_value == Decimal("870")  # 2 × 4.35 × 100
+    assert opt.unrealized_pnl == Decimal("70")  # 870 − 800
+    # equity/options 组装正确:股票带 DB conid(fixture 无 conid → None),期权带 conid
+    assert provider.seen_equity == {"AAPL": None}
+    assert provider.seen_options == {"AAPL  260116C00150000": 9999777}
+    # 尾点:cash 10000−1000−800=8200;AAPL 1200;期权 870 → 10270
+    # cumulative_pnl(mode B)= 10270 − 10000 = 270
+    assert snap.curve_tail.cumulative_pnl == Decimal("270")
+
+
+def test_live_snapshot_option_at_cost_when_no_mark(db_session, account, instrument):
+    """离线(或期权缺 mark)→ 期权展示留空,但尾点按成本计入(修 A 的漏计 bug)。"""
+    option = _option_instrument(db_session)
+    db_session.add(_deposit(account, "10000", datetime(2026, 1, 1, 9)))
+    db_session.add(_buy(account, instrument, 10, "1000", datetime(2026, 1, 2, 10), "B1"))
+    db_session.add(_buy(account, option, 2, "800", datetime(2026, 1, 3, 10), "B2"))
+    db_session.commit()
+    provider = _FakeChain(
+        LiveQuotes(closes={"AAPL": Decimal("120")}, option_marks={}, source="yahoo")
+    )
+
+    snap = compute_live_snapshot(db_session, account, provider, "B")
+
+    assert snap.source == "yahoo"
+    opt = {p.symbol: p for p in snap.positions}["AAPL  260116C00150000"]
+    assert opt.market_price is None
+    assert opt.market_value is None
+    assert opt.unrealized_pnl is None
+    # 尾点:8200 + 1200 + 期权成本 800 = 10200 → pnl 200(修复前会漏掉 800)
+    assert snap.curve_tail.cumulative_pnl == Decimal("200")
+
+
+def test_live_snapshot_option_without_conid_not_requested(db_session, account, instrument):
+    option = _option_instrument(db_session, conid=None)
+    db_session.add(_deposit(account, "10000", datetime(2026, 1, 1, 9)))
+    db_session.add(_buy(account, instrument, 10, "1000", datetime(2026, 1, 2, 10), "B1"))
+    db_session.add(_buy(account, option, 2, "800", datetime(2026, 1, 3, 10), "B2"))
+    db_session.commit()
+    provider = _FakeChain(
+        LiveQuotes(closes={"AAPL": Decimal("120")}, option_marks={}, source="ibkr")
+    )
+
+    snap = compute_live_snapshot(db_session, account, provider, "B")
+
+    assert provider.seen_options == {}  # conid 缺失 → 不请求,直接成本计
+    assert snap.curve_tail.cumulative_pnl == Decimal("200")
