@@ -1,5 +1,6 @@
 """Shared FastAPI dependencies for the API layer."""
 
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Depends, HTTPException
@@ -32,8 +33,16 @@ def get_account(account_id: str, db: Session = Depends(get_db)) -> Account:
     return account
 
 
-def get_market_data_provider() -> MarketDataProvider:
-    """The market-data provider — overridable in tests with a fake."""
+@lru_cache(maxsize=1)
+def _chained_provider() -> ChainedMarketDataProvider:
+    """Build the chained market-data provider once per process."""
     return ChainedMarketDataProvider(
         ibkr=IBKRClientPortalProvider(), yahoo=YahooFinanceProvider()
     )
+
+
+def get_market_data_provider() -> MarketDataProvider:
+    """The market-data provider — process-level singleton so the IBKR leg's
+    conid cache and session priming survive across requests; overridable in
+    tests with a fake."""
+    return _chained_provider()

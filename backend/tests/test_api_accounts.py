@@ -217,3 +217,9 @@ def test_live_snapshot_reports_source(api_client):
 
     assert response.status_code == 200
     assert response.json()["source"] == "yahoo"
+
+
+def test_market_data_provider_is_process_singleton():
+    from app.api.deps import get_market_data_provider
+
+    assert get_market_data_provider() is get_market_data_provider()
