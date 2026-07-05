@@ -34,7 +34,7 @@ def parse_price(raw: str | None) -> Decimal | None:
     if not text:
         return None
     try:
-        return Decimal(text)
+        return Decimal(text.replace(",", ""))
     except InvalidOperation:
         return None
 

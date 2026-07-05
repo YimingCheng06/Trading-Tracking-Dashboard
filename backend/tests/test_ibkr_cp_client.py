@@ -37,6 +37,11 @@ def test_parse_price_negative_and_garbage():
     assert parse_price("N/A") is None
 
 
+def test_parse_price_strips_thousands_separators():
+    assert parse_price("4,321.00") == Decimal("4321.00")
+    assert parse_price("C1,234.5") == Decimal("1234.5")
+
+
 # -- auth_ok ---------------------------------------------------------------
 
 def test_auth_ok_true_when_authenticated():
